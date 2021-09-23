@@ -55,7 +55,7 @@ namespace TexitArchenemy.Services.Twitter
         private List<TwitterRule> DeserializeRules()
         {
             try {
-                return JsonSerializer.Deserialize<List<TwitterRule>>(File.ReadAllText(@"D:\Documents\GitHub\TexitArchenemy\TexitArchenemy\Services\Twitter\rules.json"));
+                return JsonSerializer.Deserialize<List<TwitterRule>>(File.ReadAllText("config/Twitter/rules.json"));
             }
             catch (FileNotFoundException)
             {
@@ -66,7 +66,7 @@ namespace TexitArchenemy.Services.Twitter
         private async Task<bool> SerializeRules()
         {
             string serialization = JsonSerializer.Serialize(rules);
-            await File.WriteAllTextAsync(@"D:\Documents\GitHub\TexitArchenemy\TexitArchenemy\Services\Twitter\rules.json", serialization);
+            await File.WriteAllTextAsync("config/Twitter/rules.json", serialization);
             return true;
         }
 
