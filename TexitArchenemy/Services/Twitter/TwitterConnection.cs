@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Tweetinvi;
+using Tweetinvi.Events;
 using Tweetinvi.Models.V2;
 using Tweetinvi.Parameters.V2;
 using Tweetinvi.Streaming.V2;
@@ -13,11 +14,12 @@ namespace TexitArchenemy.Services.Twitter
 {
     public class TwitterConnection
     {
-        private List<TwitterRule> rules;
+        private readonly List<TwitterRule> rules;
         private readonly TwitterClient client;
+        private IFilteredStreamV2 stream;
 
 
-         public TwitterConnection(string apiConsumerKey, string apiConsumerSecret, string bearerToken)
+        private TwitterConnection(string apiConsumerKey, string apiConsumerSecret, string bearerToken)
         {
             // Connect to twitter
             client = new TwitterClient(apiConsumerKey, apiConsumerSecret, bearerToken);
@@ -28,31 +30,37 @@ namespace TexitArchenemy.Services.Twitter
          public TwitterConnection(TwitterAuth auth) : this(auth.apiKey, auth.apiSecret, auth.apiToken) { } 
 
 
-             public async Task StartStream(EventHandler<Tweetinvi.Events.V2.FilteredStreamTweetV2EventArgs> toHook)
+         public async Task StartStream(EventHandler<Tweetinvi.Events.V2.FilteredStreamTweetV2EventArgs> toHook)
         {
             // Delete and readd rules
-            
-            var rules2 = DeserializeRules();
-            
+
             FilteredStreamRuleV2[] currentRules =(await client.StreamsV2.GetRulesForFilteredStreamV2Async()).Rules;
+            IStartFilteredStreamV2Parameters a = new StartFilteredStreamV2Parameters();
             if(currentRules.Length > 0)
                 await client.StreamsV2.DeleteRulesFromFilteredStreamAsync(currentRules);
             
             await client.StreamsV2.AddRulesToFilteredStreamAsync(rules.Select(x => new FilteredStreamRuleConfig(x.value, x.tag)).ToArray());
             
-            IFilteredStreamV2 stream = client.StreamsV2.CreateFilteredStream();
+            stream = client.StreamsV2.CreateFilteredStream();
             stream.TweetReceived += toHook;
 
             // Need to wait a bit after adding the rules - Twitter literally says "a minute" so let's take that at face value
-            await Task.Delay(60 * 1000);
-            
-            Console.WriteLine("Starting stream");
+            while (true)
+            {
+                await Task.Delay(60 * 1000);
 
-            await stream.StartAsync(); // This never finishes btw so it's literally just blocking 
+                Console.WriteLine("Starting stream");
+
+                await stream.StartAsync(); // This only finishes on disconnection
+
+                Console.WriteLine("Stream was disconnected! Waiting...");
+            }
+
 
         }
+         
 
-        private List<TwitterRule> DeserializeRules()
+        private static List<TwitterRule> DeserializeRules()
         {
             try {
                 return JsonSerializer.Deserialize<List<TwitterRule>>(File.ReadAllText("config/Twitter/rules.json"));
@@ -99,6 +107,11 @@ namespace TexitArchenemy.Services.Twitter
             };
 
             return ruleValue;
+        }
+
+        public void Disconnect()
+        {
+            stream?.StopStream();
         }
 
     }

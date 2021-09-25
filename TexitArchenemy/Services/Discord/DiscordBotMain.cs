@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Discord;
@@ -13,7 +12,7 @@ namespace TexitArchenemy.Services.Discord
     {
 
         private readonly DiscordSocketClient _client;
-        private SemaphoreSlim waitReadySemaphore = new SemaphoreSlim(0, 1);
+        private readonly SemaphoreSlim _waitReadySemaphore = new(0, 1);
         
         public DiscordBotMain()
         {
@@ -26,11 +25,12 @@ namespace TexitArchenemy.Services.Discord
             await _client.LoginAsync(TokenType.Bot, GetToken());
             await _client.StartAsync();
             _client.Ready += semaphoreShit;
-            await waitReadySemaphore.WaitAsync();
+            await _waitReadySemaphore.WaitAsync();
+            await _client.SetActivityAsync(new Game("Texit", ActivityType.Watching));
 
         }
 
-        private string GetToken()
+        private static string GetToken()
         {
             return JsonSerializer.Deserialize<DiscordAuth>(File.ReadAllText("config/Discord/auth.json")).token;
         }
@@ -46,12 +46,24 @@ namespace TexitArchenemy.Services.Discord
             await textChannel.SendMessageAsync(message);
         }
 
+        public async Task Disconnect()
+        {
+            await _client.StopAsync();
+            await _client.LogoutAsync();
+            _client.Dispose();
+            semaphoreShit().Dispose();
+        }
+        
+        
+        
         private Task semaphoreShit()
         {
-            waitReadySemaphore.Release();
+            _waitReadySemaphore.Release();
             _client.Ready -= semaphoreShit;
             return Task.CompletedTask;
         }
+
+
 
 
     }
