@@ -51,7 +51,7 @@ namespace TexitArchenemy.Services.Discord
             await _client.StopAsync();
             await _client.LogoutAsync();
             _client.Dispose();
-            semaphoreShit().Dispose();
+            _waitReadySemaphore.Dispose();
         }
         
         
