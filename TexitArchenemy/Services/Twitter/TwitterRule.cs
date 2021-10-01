@@ -9,9 +9,9 @@ namespace TexitArchenemy.Services.Twitter
         [JsonInclude]
         public string value;
         [JsonInclude]
-        public string tag;
+        public int tag;
 
-        public TwitterRule(string value, string tag)
+        public TwitterRule(string value, int tag)
         {
             this.value = value;
             this.tag = tag;

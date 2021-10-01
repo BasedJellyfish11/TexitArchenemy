@@ -1,9 +1,7 @@
 ﻿using System;
-using System.IO;
-using System.Net.Mime;
-using System.Runtime.InteropServices;
-using System.Text.Json;
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using TexitArchenemy.Services.DB;
 using TexitArchenemy.Services.Discord;
 using TexitArchenemy.Services.Twitter;
 using Tweetinvi.Events.V2;
@@ -13,43 +11,54 @@ namespace TexitArchenemy
 {
     public static class Program
     {
-        private static DiscordBotMain _botMain;
-        private static TwitterConnection _twitter;
+        private static DiscordBotMain? _botMain;
+        private static TwitterConnection? _twitter;
         private static async Task Main()
         {
+            
+            
+            _botMain = new DiscordBotMain();
+            _twitter = new TwitterConnection(await SQLInteracter.GetTwitterToken());
             
             Console.CancelKeyPress += End;
             AppDomain.CurrentDomain.ProcessExit += End;
             
-            _botMain = new DiscordBotMain();
-            await _botMain.Connect();
-            _twitter = new TwitterConnection
-                (JsonSerializer.Deserialize<TwitterAuth>(await File.ReadAllTextAsync("config/Twitter/auth.json")));
+            await _botMain.Connect(await SQLInteracter.GetDiscordToken());
             Task twitterStream = _twitter.StartStream(printTweet);
             
             
             await Task.WhenAll(twitterStream);
+            
             await End();
+
 
         }
 
 
 
-        private static async void printTweet(object e, FilteredStreamTweetV2EventArgs args)
+        private static async void printTweet(object? e, FilteredStreamTweetV2EventArgs args)
         {
             TweetV2 tweet = args.Tweet;
             if (tweet == null)
-                throw new InvalidDataException(args.Json);
-
-            if (tweet.ReferencedTweets != null && tweet.ReferencedTweets[0].Type == "retweeted")
-                await _botMain.SendMessage($"https://twitter.com/twitter/status/{tweet.ReferencedTweets[0].Id}", 800584635423785041);
-                // Console.WriteLine($"https://twitter.com/twitter/status/{tweet.ReferencedTweets[0].Id}");
-            else
             {
-                await _botMain.SendMessage($"https://twitter.com/twitter/status/{tweet.Id}", 800584635423785041);
-                Console.WriteLine($"https://twitter.com/twitter/status/{tweet.Id}");
-                Console.WriteLine(args.Tweet.Text);
+                Console.WriteLine($"A non tweet (probably an event) was received!. The JSON reads as follows: {Environment.NewLine} {args.Json}");
+                return;
             }
+
+            HashSet<ulong> channelsToSend = new();
+            foreach (FilteredStreamMatchingRuleV2? rule in args.MatchingRules)
+            {
+                await SQLInteracter.GetTwitterRuleChannels(int.Parse(rule.Tag), channelsToSend);
+            }
+
+            foreach (ulong channelID in channelsToSend)
+            {            
+                if (tweet.ReferencedTweets[0]?.Type == "retweeted")
+                    await _botMain!.SendMessage($"https://twitter.com/twitter/status/{tweet.ReferencedTweets[0].Id}", channelID);
+                else
+                    await _botMain!.SendMessage($"https://twitter.com/twitter/status/{tweet.Id}", channelID);
+            }
+                
 
         }
         private static async void End(object? sender, EventArgs e)
@@ -63,10 +72,8 @@ namespace TexitArchenemy
 
         private static async Task End()
         {
-            if(_twitter!= null)
-                _twitter.Disconnect();
-            if(_botMain != null)
-                await _botMain?.Disconnect();
+            _twitter?.Disconnect();
+            await (_botMain?.Disconnect()??Task.CompletedTask);
         }
 
     }

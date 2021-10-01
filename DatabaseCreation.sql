@@ -93,11 +93,12 @@ GO
 /* Table for Discord credentials */
 CREATE TABLE
 	discord_auth(
-		token VARCHAR(60) NOT NULL,
-		bot_id INT UNIQUE NOT NULL
+		token VARCHAR(60) NOT NULL
 		)
 GO
 
+		
+GO
 /* Twitter credentials */
 CREATE TABLE
 	twitter_auth(
@@ -230,16 +231,39 @@ BEGIN
 	ELSE 
 	BEGIN
 		INSERT INTO
-			repost_repository
+			repost_repository (channel_id, message_id, link_id, link_type_id)
 		VALUES
 			(@channel_id, @message_id, @link_id, (SELECT link_type_id FROM link_types WHERE link_type_description = @link_type_description))
-		SELECT '-1'
+		SELECT '-1' AS channel_id, '-1' AS message_id
 		RETURN
 	END
 END
 
 GO
 				
+
+/* Yeet the channels that just aren't used. Only called in triggers */
+CREATE PROCEDURE remove_useless_channels
+AS
+BEGIN
+	DELETE FROM 
+		discord_channels
+	WHERE
+		discord_channels.pixiv_expand = 0 
+		AND discord_channels.repost_check = 0
+		AND discord_channels.channel_id IN (
+			SELECT
+				discord_channels.channel_id
+			FROM
+				discord_channels
+			LEFT JOIN rule_channel_relation
+			ON discord_channels.channel_id = rule_channel_relation.channel_id
+			WHERE rule_channel_relation.tag IS NULL
+			)
+END
+
+GO
+
 /* Adding a rule is actually surprisingly complex since we want no duplicates and we need to check FK integrity */
 CREATE PROCEDURE add_twitter_rule
 	@channel_id VARCHAR(20),
@@ -269,11 +293,15 @@ BEGIN
 		SET @tag = (SELECT tag FROM twitter_rules WHERE rule_value = @rule_value)
 		BEGIN TRY
 			INSERT INTO
-				rule_channel_relation
+				rule_channel_relation(tag, channel_id)
 			VALUES
 				(@tag, @channel_id)
+
+			SELECT @tag AS tag
+			RETURN 
 		END TRY 
 		BEGIN CATCH
+			SELECT -1 AS tag
 			RETURN(-1)
 		END CATCH
 	END
@@ -282,37 +310,41 @@ END
 
 GO
 
-/* Yeet the channels that just aren't used */
-CREATE PROCEDURE remove_useless_channels
-AS
-BEGIN
-	DELETE FROM 
-		discord_channels
-	WHERE
-		discord_channels.pixiv_expand = 0 
-		AND discord_channels.repost_check = 0
-		AND discord_channels.channel_id IN (
-			SELECT
-				discord_channels.channel_id
-			FROM
-				discord_channels
-			LEFT JOIN rule_channel_relation
-			ON discord_channels.channel_id = rule_channel_relation.channel_id
-			WHERE rule_channel_relation.tag IS NULL
-			)
-END
-
-GO
-
-/* Delete a rule */
+/* Delete a rule association. We will let the trigger handle deleting the actual rule if needed */
 CREATE PROCEDURE delete_twitter_rule 
-	@tag INT
+	@tag INT,
+	@channel_id VARCHAR(20)
 	AS
 	BEGIN
 		DELETE FROM
-			twitter_rules
+			rule_channel_relation
 		WHERE
-			twitter_rules.tag = @tag
+			tag = @tag AND
+			channel_id = @channel_id
+	END
+GO
+
+/* Get the rules */
+CREATE PROCEDURE get_twitter_rules
+	AS
+	BEGIN
+		SELECT
+			*
+		FROM
+			twitter_rules
+	END
+GO
+
+CREATE PROCEDURE get_twitter_rule_channels
+	@tag INT
+	AS
+	BEGIN
+		SELECT
+			channel_id
+		FROM
+			rule_channel_relation
+		WHERE
+			tag = @tag
 	END
 GO
 

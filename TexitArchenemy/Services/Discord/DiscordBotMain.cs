@@ -1,10 +1,8 @@
 ﻿using System;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
-using System.Text.Json;
 
 namespace TexitArchenemy.Services.Discord
 {
@@ -19,22 +17,17 @@ namespace TexitArchenemy.Services.Discord
             _client = new DiscordSocketClient();
         }
 
-        public async Task Connect()
+        public async Task Connect(string token)
         {
 
-            await _client.LoginAsync(TokenType.Bot, GetToken());
+            await _client.LoginAsync(TokenType.Bot, token);
             await _client.StartAsync();
             _client.Ready += semaphoreShit;
             await _waitReadySemaphore.WaitAsync();
             await _client.SetActivityAsync(new Game("Texit", ActivityType.Watching));
 
         }
-
-        private static string GetToken()
-        {
-            return JsonSerializer.Deserialize<DiscordAuth>(File.ReadAllText("config/Discord/auth.json")).token;
-        }
-
+        
         public async Task SendMessage(string message, ulong channel)
         {
             if (_client.GetChannel(channel) is not SocketTextChannel textChannel)

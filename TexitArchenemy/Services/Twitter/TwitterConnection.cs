@@ -2,10 +2,9 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
+using TexitArchenemy.Services.DB;
 using Tweetinvi;
-using Tweetinvi.Events;
 using Tweetinvi.Models.V2;
 using Tweetinvi.Parameters.V2;
 using Tweetinvi.Streaming.V2;
@@ -14,16 +13,15 @@ namespace TexitArchenemy.Services.Twitter
 {
     public class TwitterConnection
     {
-        private readonly List<TwitterRule> rules;
         private readonly TwitterClient client;
-        private IFilteredStreamV2 stream;
+        private IFilteredStreamV2? stream;
 
 
         private TwitterConnection(string apiConsumerKey, string apiConsumerSecret, string bearerToken)
         {
             // Connect to twitter
             client = new TwitterClient(apiConsumerKey, apiConsumerSecret, bearerToken);
-            rules = DeserializeRules();
+            SQLInteracter.OnAddTwitterRule += AddRule;
 
         }
         
@@ -35,68 +33,48 @@ namespace TexitArchenemy.Services.Twitter
             // Delete and readd rules
 
             FilteredStreamRuleV2[] currentRules =(await client.StreamsV2.GetRulesForFilteredStreamV2Async()).Rules;
-            IStartFilteredStreamV2Parameters a = new StartFilteredStreamV2Parameters();
             if(currentRules.Length > 0)
                 await client.StreamsV2.DeleteRulesFromFilteredStreamAsync(currentRules);
             
-            await client.StreamsV2.AddRulesToFilteredStreamAsync(rules.Select(x => new FilteredStreamRuleConfig(x.value, x.tag)).ToArray());
+            
+            await client.StreamsV2.AddRulesToFilteredStreamAsync((await DeserializeRules()).Select(x => new FilteredStreamRuleConfig(x.value, x.tag.ToString())).ToArray());
             
             stream = client.StreamsV2.CreateFilteredStream();
             stream.TweetReceived += toHook;
 
             // Need to wait a bit after adding the rules - Twitter literally says "a minute" so let's take that at face value
+            await Task.Delay(60 * 1000);
             while (true)
             {
-                await Task.Delay(60 * 1000);
 
                 Console.WriteLine("Starting stream");
 
-                await stream.StartAsync(); // This only finishes on disconnection
+                try {
+                    await stream.StartAsync(); // This only finishes on disconnection and it's by throwing
+                }
+                catch (IOException e)
+                {
+                    Console.WriteLine($"Stream was disconnected! Exception was {e} Waiting...");
+                    await Task.Delay(60 * 1000);
+                } 
 
-                Console.WriteLine("Stream was disconnected! Waiting...");
             }
 
 
         }
          
 
-        private static List<TwitterRule> DeserializeRules()
+        private static async Task<HashSet<TwitterRule>> DeserializeRules()
         {
-            try {
-                return JsonSerializer.Deserialize<List<TwitterRule>>(File.ReadAllText("config/Twitter/rules.json"));
-            }
-            catch (FileNotFoundException)
-            {
-                return new List<TwitterRule>();
-            }
-        }
-        
-        private async Task<bool> SerializeRules()
-        {
-            string serialization = JsonSerializer.Serialize(rules);
-            await File.WriteAllTextAsync("config/Twitter/rules.json", serialization);
-            return true;
+            return await SQLInteracter.GetTwitterRules();
         }
 
-        public async Task AddRule(string value, string tag)
+        private async Task AddRule(TwitterRule rule)
         {
-            TwitterRule rule = new TwitterRule(value, tag);
-            
-            if (rules.Contains(rule))
-            {
-                Console.WriteLine("This rule already exists, exiting");
-                return;
-            }
-
-            Console.WriteLine($"Adding rule {rule.value} with tag {rule.tag}");
-            rules.Add(rule);
-
-            await Task.WhenAll( SerializeRules(),
-                                client.StreamsV2.AddRulesToFilteredStreamAsync(new FilteredStreamRuleConfig(rule.value, rule.tag))
-                                );
+            await client.StreamsV2.AddRulesToFilteredStreamAsync(new FilteredStreamRuleConfig(rule.value, rule.tag.ToString()));
         }
 
-        public string BuildFollowUseRule(string user, RetweetsMode retweets)
+        public static string BuildFollowUseRule(string user, RetweetsMode retweets)
         {
             string ruleValue = retweets switch
             {
