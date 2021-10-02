@@ -3,20 +3,19 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using TexitArchenemy.Services.DB;
 using TexitArchenemy.Services.Discord;
+using TexitArchenemy.Services.Logger;
 using TexitArchenemy.Services.Twitter;
 using Tweetinvi.Events.V2;
 using Tweetinvi.Models.V2;
 
 namespace TexitArchenemy
 {
-    public static class Program
+    public static class TexitArchenemy
     {
         private static DiscordBotMain? _botMain;
         private static TwitterConnection? _twitter;
         private static async Task Main()
         {
-            
-            
             _botMain = new DiscordBotMain();
             _twitter = new TwitterConnection(await SQLInteracter.GetTwitterToken());
             
@@ -24,31 +23,29 @@ namespace TexitArchenemy
             AppDomain.CurrentDomain.ProcessExit += End;
             
             await _botMain.Connect(await SQLInteracter.GetDiscordToken());
-            Task twitterStream = _twitter.StartStream(printTweet);
+            Task twitterStream = _twitter.StartStream(PostTweet);
             
             
             await Task.WhenAll(twitterStream);
             
             await End();
-
-
+            
         }
+        
 
-
-
-        private static async void printTweet(object? e, FilteredStreamTweetV2EventArgs args)
+        private static async void PostTweet(object? e, FilteredStreamTweetV2EventArgs args)
         {
             TweetV2 tweet = args.Tweet;
             if (tweet == null)
             {
-                Console.WriteLine($"A non tweet (probably an event) was received!. The JSON reads as follows: {Environment.NewLine} {args.Json}");
+                await ArchenemyLogger.Log($"A non tweet (probably an event) was received!. The JSON reads as follows: {Environment.NewLine} {args.Json}");
                 return;
             }
 
             HashSet<ulong> channelsToSend = new();
             foreach (FilteredStreamMatchingRuleV2? rule in args.MatchingRules)
             {
-                await SQLInteracter.GetTwitterRuleChannels(int.Parse(rule.Tag), channelsToSend);
+                channelsToSend.UnionWith(await SQLInteracter.GetTwitterRuleChannels(int.Parse(rule.Tag)));
             }
 
             foreach (ulong channelID in channelsToSend)
@@ -58,9 +55,12 @@ namespace TexitArchenemy
                 else
                     await _botMain!.SendMessage($"https://twitter.com/twitter/status/{tweet.Id}", channelID);
             }
-                
-
+            
         }
+        
+        
+        
+        
         private static async void End(object? sender, EventArgs e)
         {
             await End();

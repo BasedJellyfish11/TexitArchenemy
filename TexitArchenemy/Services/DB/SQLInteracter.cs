@@ -13,7 +13,7 @@ namespace TexitArchenemy.Services.DB
 {
     public static class SQLInteracter
     {
-        private const string connectionString = @"Data Source=.\SQLEXPRESS;Database=TEXIT_ARCHENEMY;Integrated Security=True;";
+        private const string CONNECTION_STRING = @"Data Source=.\SQLEXPRESS;Database=TEXIT_ARCHENEMY;Integrated Security=True;";
 
         public delegate Task OnAddTwitterRuleHandler(TwitterRule addedRule);
         public static OnAddTwitterRuleHandler? OnAddTwitterRule;
@@ -21,7 +21,7 @@ namespace TexitArchenemy.Services.DB
         
         public static async Task<string> GetDiscordToken()
         {
-            await using SqlConnection connection = new(connectionString);
+            await using SqlConnection connection = new(CONNECTION_STRING);
             await using SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_discord_creds, connection);
             if(!reader.HasRows)
                 throw new InvalidOperationException(NoRowsError(ProcedureNames.get_discord_creds));
@@ -32,7 +32,7 @@ namespace TexitArchenemy.Services.DB
         
         public static async Task<TwitterAuth> GetTwitterToken()
         {
-            await using SqlConnection connection = new(connectionString);
+            await using SqlConnection connection = new(CONNECTION_STRING);
             await using SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_twitter_creds, connection);
             
             if(!reader.HasRows)
@@ -49,7 +49,7 @@ namespace TexitArchenemy.Services.DB
 
         public static async Task<TwitterRule?> AddTwitterRule(string rule_value, SocketGuildChannel channel)
         {
-            await using SqlConnection connection = new(connectionString);
+            await using SqlConnection connection = new(CONNECTION_STRING);
             
             SqlParameter[] parameters =
             {
@@ -76,7 +76,7 @@ namespace TexitArchenemy.Services.DB
 
         public static async Task<(ulong messageId, ulong channelId)?> CheckRepost(SocketMessage message, string linkId, LinkTypes linkType )
         {
-            await using SqlConnection connection = new(connectionString);
+            await using SqlConnection connection = new(CONNECTION_STRING);
             SqlParameter[] parameters =
             {
                 new($"@{CheckRepostParams.channel_id}", SqlDbType.VarChar),
@@ -121,9 +121,9 @@ namespace TexitArchenemy.Services.DB
 
         }
         
-        public static async Task<HashSet<ulong>> GetTwitterRuleChannels(int tag, HashSet<ulong> toAppend)
+        public static async Task<HashSet<ulong>> GetTwitterRuleChannels(int tag)
         {
-            await using SqlConnection connection = new(connectionString);
+            await using SqlConnection connection = new(CONNECTION_STRING);
             SqlParameter[] parameters =
             {
                 new($"@{GetTwitterRuleChannelsParams.tag}", SqlDbType.Int),
@@ -135,17 +135,18 @@ namespace TexitArchenemy.Services.DB
             if(!reader.HasRows)
                 throw new InvalidOperationException(NoRowsError(ProcedureNames.get_twitter_rule_channels));
 
+            HashSet<ulong> channelsForRule = new();
             while (reader.Read())
             {
-                toAppend.Add(ulong.Parse((string) reader[RuleChannelRelationColumns.channel_id]));
+                channelsForRule.Add(ulong.Parse((string) reader[RuleChannelRelationColumns.channel_id]));
             }
 
-            return toAppend;
+            return channelsForRule;
         }
         
         public static async Task<HashSet<TwitterRule>> GetTwitterRules()
         {
-            await using SqlConnection connection = new(connectionString);
+            await using SqlConnection connection = new(CONNECTION_STRING);
             await using SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_twitter_rules, connection);
             if(!reader.HasRows)
                 throw new InvalidOperationException(NoRowsError(ProcedureNames.get_twitter_rules));
@@ -181,7 +182,7 @@ namespace TexitArchenemy.Services.DB
 
         private static async Task<int> ExecuteReturnValueProcedure(string procedure_name, SqlParameter[]? parameters = null)
         {
-            await using SqlConnection conn = new(connectionString);
+            await using SqlConnection conn = new(CONNECTION_STRING);
             await conn.OpenAsync();
             SqlCommand sqlComm = new(procedure_name, conn) {CommandType = CommandType.StoredProcedure};
             if (parameters != null)

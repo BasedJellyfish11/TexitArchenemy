@@ -1,8 +1,8 @@
-﻿using System;
-using System.Threading;
+﻿using System.Threading;
 using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
+using TexitArchenemy.Services.Logger;
 
 namespace TexitArchenemy.Services.Discord
 {
@@ -19,7 +19,6 @@ namespace TexitArchenemy.Services.Discord
 
         public async Task Connect(string token)
         {
-
             await _client.LoginAsync(TokenType.Bot, token);
             await _client.StartAsync();
             _client.Ready += semaphoreShit;
@@ -32,7 +31,7 @@ namespace TexitArchenemy.Services.Discord
         {
             if (_client.GetChannel(channel) is not SocketTextChannel textChannel)
             {
-                Console.WriteLine("Couldn't get the text channel!");
+                await ArchenemyLogger.Log("Couldn't get the text channel!");
                 return;
             }
                 

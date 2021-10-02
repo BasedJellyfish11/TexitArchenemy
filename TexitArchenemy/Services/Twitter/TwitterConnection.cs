@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using TexitArchenemy.Services.DB;
+using TexitArchenemy.Services.Logger;
 using Tweetinvi;
 using Tweetinvi.Models.V2;
 using Tweetinvi.Parameters.V2;
@@ -24,9 +25,8 @@ namespace TexitArchenemy.Services.Twitter
             SQLInteracter.OnAddTwitterRule += AddRule;
 
         }
-        
-         public TwitterConnection(TwitterAuth auth) : this(auth.apiKey, auth.apiSecret, auth.apiToken) { } 
-
+        public TwitterConnection(TwitterAuth auth) : this(auth.apiKey, auth.apiSecret, auth.apiToken) { }
+         
 
          public async Task StartStream(EventHandler<Tweetinvi.Events.V2.FilteredStreamTweetV2EventArgs> toHook)
         {
@@ -46,24 +46,21 @@ namespace TexitArchenemy.Services.Twitter
             await Task.Delay(60 * 1000);
             while (true)
             {
-
-                Console.WriteLine("Starting stream");
+                await ArchenemyLogger.Log("Starting stream");
 
                 try {
                     await stream.StartAsync(); // This only finishes on disconnection and it's by throwing
                 }
                 catch (IOException e)
                 {
-                    Console.WriteLine($"Stream was disconnected! Exception was {e} Waiting...");
+                    await ArchenemyLogger.Log($"Stream was disconnected! Exception was {e} Waiting...");
                     await Task.Delay(60 * 1000);
                 } 
 
             }
 
-
         }
          
-
         private static async Task<HashSet<TwitterRule>> DeserializeRules()
         {
             return await SQLInteracter.GetTwitterRules();
