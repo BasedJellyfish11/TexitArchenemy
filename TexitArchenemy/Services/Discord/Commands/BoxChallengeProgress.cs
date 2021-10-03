@@ -18,7 +18,7 @@ namespace TexitArchenemy.Services.Discord.Commands
 
             EmbedBuilder embedBuilder = new()
             {
-                Description = $"{(Context.User as SocketGuildUser)?.Nickname ?? Context.User.Username} has drawn {progress} box {(progress == 1? string.Empty: "es")} ({((float)progress / 250):0.00%})"
+                Description = buildDescriptionString(progress)  
             };
             embedBuilder.WithAuthor(Context.User);
             await ReplyAsync(embed:embedBuilder.Build());
@@ -33,12 +33,18 @@ namespace TexitArchenemy.Services.Discord.Commands
 
             EmbedBuilder embedBuilder = new()
             {
-                Description = $"{(Context.User as SocketGuildUser)?.Nickname ?? Context.User.Username} {(progress != 0? $"has drawn {progress} box { (progress == 1? string.Empty : "es")} ({((float)progress / 250):0.00%})":"hasn't started the 250 box challenge!")}"
+                Description = buildDescriptionString(progress) 
             };
 
             embedBuilder.WithAuthor(Context.User);
             await ReplyAsync(embed:embedBuilder.Build());
 
+        }
+
+        private string buildDescriptionString(int progress)
+        {
+            return
+                $"{(Context.User as SocketGuildUser)?.Nickname ?? Context.User.Username} {(progress != 0 ? $"has drawn {progress} box{(progress == 1 ? string.Empty : "es")} ({((float)progress / 250):0.00%})" : "hasn't started the 250 box challenge!")}";
         }
     }
 }
