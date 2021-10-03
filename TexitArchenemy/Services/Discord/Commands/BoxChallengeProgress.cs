@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
@@ -14,13 +15,36 @@ namespace TexitArchenemy.Services.Discord.Commands
         public async Task UpdateBoxChallengeProgress(int drawnBoxes = 0)
         {
             int progress;
-            if(drawnBoxes != 0)
+            EmbedBuilder embedBuilder;
+            if (drawnBoxes != 0)
+            {
+                try
+                {
+                    checked
+                    {
+                        int a = await SQLInteracter.GetBoxChallengeProgress(Context.User) + drawnBoxes;
+
+                    }
+                }
+                catch (OverflowException)
+                {
+                    embedBuilder = new()
+                    {
+                        Description = "Haha funny overflow attempt you're so funny dude haha"  
+                    };
+                    embedBuilder.WithAuthor(Context.User);
+                    await ReplyAsync(embed:embedBuilder.Build());
+                    await ArchenemyLogger.Log($"{Context.User} tried to overflow BoxChallengeProgress he is so funny", "Discord");
+                    return;
+                }
+
                 progress = await SQLInteracter.UpdateBoxChallengeProgress(drawnBoxes, Context.User);
+            }
 
             else
                 progress = await SQLInteracter.GetBoxChallengeProgress(Context.User);
 
-            EmbedBuilder embedBuilder = new()
+            embedBuilder = new()
             {
                 Description = buildDescriptionString(progress)  
             };
