@@ -1,7 +1,9 @@
-﻿using System.Reflection;
+﻿using System;
+using System.Reflection;
 using System.Threading.Tasks;
 using Discord.Commands;
 using Discord.WebSocket;
+using TexitArchenemy.Services.Database;
 
 namespace TexitArchenemy.Services.Discord
 {
@@ -42,15 +44,30 @@ namespace TexitArchenemy.Services.Discord
             int argPos = 0;
 
             // Determine if the message is a command based on the prefix and make sure no bots trigger commands
-            if (!(message.HasCharPrefix('!', ref argPos) || message.Author.IsBot))
+            if (message.Author.IsBot)
                 return;
-
+            
             // Create a WebSocket-based command context based on the message
             SocketCommandContext? context = new(_client, message);
+            if (!message.HasCharPrefix('!', ref argPos))
+            {
+                await CheckNonCommand(context);
+            }
+            else
+            {
+                // Execute the command with the command context we just
+                // created, along with the service provider for precondition checks.
+                await _commands.ExecuteAsync(context, argPos, null);
+            }
+        }
 
-            // Execute the command with the command context we just
-            // created, along with the service provider for precondition checks.
-            await _commands.ExecuteAsync(context, argPos, null);
+        private async Task CheckNonCommand(SocketCommandContext context)
+        {
+            if (context.Message.Content.ToLower() == "test")
+            {
+                await context.Channel.SendMessageAsync($"{context.Message.Author.Mention} How about you test these nuts");
+            }
+
         }
     }
 }
