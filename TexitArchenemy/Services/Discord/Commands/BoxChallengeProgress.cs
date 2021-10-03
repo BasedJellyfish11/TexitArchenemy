@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
@@ -12,9 +10,14 @@ namespace TexitArchenemy.Services.Discord.Commands
     {
         [Command("BoxChallengeProgress")]
         [Summary("Adds the given number to the user's current Draw A Box 250 box challenge progress")]
-        public async Task UpdateBoxChallengeProgress(int drawnBoxes)
+        public async Task UpdateBoxChallengeProgress(int drawnBoxes = 0)
         {
-            int progress = await SQLInteracter.UpdateBoxChallengeProgress(drawnBoxes, Context.User);
+            int progress;
+            if(drawnBoxes != 0)
+                progress = await SQLInteracter.UpdateBoxChallengeProgress(drawnBoxes, Context.User);
+
+            else
+                progress = await SQLInteracter.GetBoxChallengeProgress(Context.User);
 
             EmbedBuilder embedBuilder = new()
             {
@@ -25,22 +28,6 @@ namespace TexitArchenemy.Services.Discord.Commands
 
         }
         
-        [Command("BoxChallengeProgress")]
-        [Summary("Gets the user's current Draw A Box 250 box challenge progress")]
-        public async Task GetBoxChallengeProgress()
-        {
-            int progress = await SQLInteracter.GetBoxChallengeProgress(Context.User);
-
-            EmbedBuilder embedBuilder = new()
-            {
-                Description = buildDescriptionString(progress) 
-            };
-
-            embedBuilder.WithAuthor(Context.User);
-            await ReplyAsync(embed:embedBuilder.Build());
-
-        }
-
         private string buildDescriptionString(int progress)
         {
             return
