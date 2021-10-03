@@ -10,7 +10,7 @@ namespace TexitArchenemy.Services.Discord.Commands
     public class BoxChallengeProgressModule: ModuleBase<SocketCommandContext>
     {
         [Command("BoxChallengeProgress")]
-        [Summary("Adds the given number to the user's current Draw A Box 250 box challenge progress")]
+        [Summary("Adds the given number to the user's current Draw A Box 250 box challenge progress. If no parameters are given, it displays the current progress")]
         public async Task UpdateBoxChallengeProgress(int drawnBoxes = 0)
         {
             int progress;

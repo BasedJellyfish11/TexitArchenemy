@@ -11,7 +11,7 @@ namespace TexitArchenemy.Services.Discord.Commands
     public class BoxWarmupModule: ModuleBase<SocketCommandContext>
     {
         [Command("BoxWarmup")]
-        [Summary("Gets a random DrawABox warmup exercise for the specified level or lower")]
+        [Summary("Gets a random DrawABox warmup exercise for the specified lesson or lower. If no parameters are given, lesson 7 is assumed")]
         public async Task BoxWarmup(int level = 7)
         {
             List<string?> warmups = await SQLInteracter.GetBoxWarmup(level);

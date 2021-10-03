@@ -12,6 +12,8 @@ namespace TexitArchenemy.Services.Discord.Commands
     {
         [Command("RepostPolice")]
         [Summary("Calls out any art reposts on this channel from now on. Currently supports twitter, pixiv and artstation")]
+        [RequireUserPermission(ChannelPermission.ManageChannels | ChannelPermission.ManageMessages, Group = "RepostPolicePermissions")]
+        [RequireUserPermission(GuildPermission.Administrator | GuildPermission.ManageChannels, Group = "RepostPolicePermissions")]
         public async Task RepostPolice()
         {
             EmbedBuilder embedBuilder;
