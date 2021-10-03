@@ -2,7 +2,7 @@
 using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
-using TexitArchenemy.Services.DB;
+using TexitArchenemy.Services.Database;
 using TexitArchenemy.Services.Logger;
 
 namespace TexitArchenemy.Services.Discord.Commands

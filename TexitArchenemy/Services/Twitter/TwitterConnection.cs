@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using TexitArchenemy.Services.DB;
+using TexitArchenemy.Services.Database;
 using TexitArchenemy.Services.Logger;
 using Tweetinvi;
 using Tweetinvi.Models.V2;

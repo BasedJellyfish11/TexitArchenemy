@@ -9,7 +9,7 @@ using TexitArchenemy.Services.Twitter;
 // It appears Connections in .NET are handled the opposite of how I was taught in uni: You open a new one every query, preferably inside a using, and .NET is so smart that it pools it
 // That's what I get from here anyway https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql-server-connection-pooling and here https://docs.microsoft.com/en-us/dotnet/api/system.data.sqlclient.sqlconnection?view=dotnet-plat-ext-5.0#remarks
 
-namespace TexitArchenemy.Services.DB
+namespace TexitArchenemy.Services.Database
 {
     public static class SQLInteracter
     {

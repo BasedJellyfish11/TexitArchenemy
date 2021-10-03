@@ -1,4 +1,4 @@
-﻿namespace TexitArchenemy.Services.DB
+﻿namespace TexitArchenemy.Services.Database
 {
     // Pretty much nothing in this file will follow C# naming conventions due to it matching SQL names.
     // This is also just a glorified string dictionary ngl

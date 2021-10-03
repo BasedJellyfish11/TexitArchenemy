@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Discord;
 using Discord.Commands;
-using TexitArchenemy.Services.DB;
+using TexitArchenemy.Services.Database;
 using TexitArchenemy.Services.Logger;
 
 namespace TexitArchenemy.Services.Discord.Commands

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using TexitArchenemy.Services.DB;
+using TexitArchenemy.Services.Database;
 using TexitArchenemy.Services.Discord;
 using TexitArchenemy.Services.Logger;
 using TexitArchenemy.Services.Twitter;
