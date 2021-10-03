@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Discord;
 using Discord.Commands;
 using TexitArchenemy.Services.DB;
+using TexitArchenemy.Services.Logger;
 
 namespace TexitArchenemy.Services.Discord.Commands
 {
@@ -21,6 +22,8 @@ namespace TexitArchenemy.Services.Discord.Commands
 
             embedBuilder.WithAuthor(Context.User);
             await ReplyAsync(embed: embedBuilder.Build());
+            await ArchenemyLogger.Log($"Executed command BoxWarmup for user {Context.User} with result {embedBuilder.Description}", "Discord");
+            
 
         }
         

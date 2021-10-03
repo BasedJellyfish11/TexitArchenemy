@@ -3,6 +3,7 @@ using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
 using TexitArchenemy.Services.DB;
+using TexitArchenemy.Services.Logger;
 
 namespace TexitArchenemy.Services.Discord.Commands
 {
@@ -25,6 +26,7 @@ namespace TexitArchenemy.Services.Discord.Commands
             };
             embedBuilder.WithAuthor(Context.User);
             await ReplyAsync(embed:embedBuilder.Build());
+            await ArchenemyLogger.Log($"Executed command BoxChallengeProgress for user {Context.User} with result {progress}", "Discord");
 
         }
         

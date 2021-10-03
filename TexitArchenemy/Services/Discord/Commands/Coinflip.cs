@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Discord.Commands;
+using TexitArchenemy.Services.Logger;
 
 namespace TexitArchenemy.Services.Discord.Commands
 {
@@ -12,6 +13,8 @@ namespace TexitArchenemy.Services.Discord.Commands
         {
             int rng = new Random().Next(0, 2);
             await ReplyAsync($"{(rng == 0?"Heads":"Tails")}");
+            await ArchenemyLogger.Log($"Executed command Coinflip with result {(rng == 0 ? "Heads" : "Tails")}", "Discord");
+            
         }
     }
 }

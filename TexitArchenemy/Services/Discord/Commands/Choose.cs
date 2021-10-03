@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Discord.Commands;
+using TexitArchenemy.Services.Logger;
 
 namespace TexitArchenemy.Services.Discord.Commands
 {
@@ -10,7 +11,9 @@ namespace TexitArchenemy.Services.Discord.Commands
         [Summary("Makes a choice among the given parameters")]
         public async Task Choose(params string[] options)
         {
-            await ReplyAsync(options[new Random().Next(0, options.Length)]);
+            string choice = options[new Random().Next(0, options.Length)];
+            await ReplyAsync(choice);
+            await ArchenemyLogger.Log($"Executed command Choose with result {choice}", "Discord");
 
         }
     }
