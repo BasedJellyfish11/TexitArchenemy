@@ -110,7 +110,7 @@ namespace TexitArchenemy.Services.Discord
 
         private Match? MatchTwitter(string message)
         {
-            Match match = Regex.Match(message, @"^.*?(?:https?):\/\/(?:www\.|mobile\.|m\.)?(twitter)(?:\.com\/)(?:.*?\/)?(?:status|statuses)\/(\d+).*$", RegexOptions.IgnoreCase);
+            Match match = Regex.Match(message, @"^.*?(?:https?):\/\/(?:www\.|mobile\.|m\.)?(?:fx)?(twitter)(?:\.com\/)(?:[\w]*?\/)?(?:status|statuses)\/(\d+).*$", RegexOptions.IgnoreCase);
             return match.Success ? match : null;
         }
         private Match? MatchPixiv(string message)
