@@ -38,7 +38,7 @@ namespace TexitArchenemy
             TweetV2 tweet = args.Tweet;
             if (tweet == null)
             {
-                await ArchenemyLogger.Log($"A non tweet (probably an event) was received!. The JSON reads as follows: {Environment.NewLine} {args.Json}");
+                await ArchenemyLogger.Log($"A non tweet (probably an event) was received!. The JSON reads as follows: {Environment.NewLine} {args.Json}", "Twitter");
                 return;
             }
 

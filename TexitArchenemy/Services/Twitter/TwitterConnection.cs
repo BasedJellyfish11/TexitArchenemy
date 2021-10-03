@@ -46,14 +46,14 @@ namespace TexitArchenemy.Services.Twitter
             await Task.Delay(60 * 1000);
             while (true)
             {
-                await ArchenemyLogger.Log("Starting stream");
+                await ArchenemyLogger.Log("Starting stream", "Twitter");
 
                 try {
                     await stream.StartAsync(); // This only finishes on disconnection and it's by throwing
                 }
                 catch (IOException e)
                 {
-                    await ArchenemyLogger.Log($"Stream was disconnected! Exception was {e} Waiting...");
+                    await ArchenemyLogger.Log($"Stream was disconnected! Exception was {e} Waiting...", "Twitter");
                     await Task.Delay(60 * 1000);
                 } 
 

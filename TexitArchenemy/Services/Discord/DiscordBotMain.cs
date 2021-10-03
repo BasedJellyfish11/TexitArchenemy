@@ -1,6 +1,7 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
 using Discord;
+using Discord.Commands;
 using Discord.WebSocket;
 using TexitArchenemy.Services.Logger;
 
@@ -10,19 +11,26 @@ namespace TexitArchenemy.Services.Discord
     {
 
         private readonly DiscordSocketClient _client;
+        private readonly CommandHandler _commandHandler;
         private readonly SemaphoreSlim _waitReadySemaphore = new(0, 1);
         
         public DiscordBotMain()
         {
             _client = new DiscordSocketClient();
+            _client.Log += ArchenemyLogger.Log;
+            
+            CommandService commandService = new(new CommandServiceConfig(){CaseSensitiveCommands = false, SeparatorChar = ';'});
+            _commandHandler = new CommandHandler(_client, commandService);
+
         }
 
         public async Task Connect(string token)
         {
+            Task installCommands = _commandHandler.InstallCommandsAsync();
             await _client.LoginAsync(TokenType.Bot, token);
             await _client.StartAsync();
             _client.Ready += semaphoreShit;
-            await _waitReadySemaphore.WaitAsync();
+            await Task.WhenAll(_waitReadySemaphore.WaitAsync(), installCommands);
             await _client.SetActivityAsync(new Game("Texit", ActivityType.Watching));
 
         }
@@ -31,7 +39,7 @@ namespace TexitArchenemy.Services.Discord
         {
             if (_client.GetChannel(channel) is not SocketTextChannel textChannel)
             {
-                await ArchenemyLogger.Log("Couldn't get the text channel!");
+                await ArchenemyLogger.Log("Couldn't get the text channel!", "Discord");
                 return;
             }
                 
@@ -45,8 +53,6 @@ namespace TexitArchenemy.Services.Discord
             _client.Dispose();
             _waitReadySemaphore.Dispose();
         }
-        
-        
         
         private Task semaphoreShit()
         {
