@@ -110,17 +110,17 @@ namespace TexitArchenemy.Services.Discord
 
         private Match? MatchTwitter(string message)
         {
-            Match match = Regex.Match(message, @"^(?:http\w?):\/\/(?:www\.|mobile\.)?(twitter)(?:\.com\/)(?:.*?\/)?(?:status|statuses)\/(\d*).*$", RegexOptions.IgnoreCase);
+            Match match = Regex.Match(message, @"^.*?(?:https?):\/\/(?:www\.|mobile\.|m\.)?(twitter)(?:\.com\/)(?:.*?\/)?(?:status|statuses)\/(\d+).*$", RegexOptions.IgnoreCase);
             return match.Success ? match : null;
         }
         private Match? MatchPixiv(string message)
         {
-            Match match = Regex.Match(message, @"^(?:http\w?):\/\/(?:www\.)?(pixiv)(?:\.net\/)(?:.*?)*(\d+).*$", RegexOptions.IgnoreCase);
+            Match match = Regex.Match(message, @"^.*?(?:https?):\/\/(?:www\.)?(pixiv)(?:\.net\/)(?:.*?)*(\d+).*$", RegexOptions.IgnoreCase);
             return match.Success ? match : null;
         }
         private Match? MatchArtstation(string message)
         {
-            Match match = Regex.Match(message, @"^(?:https?):\/\/(?:.*\.)?(artstation)(?:\.com\/)(?:artwork|projects?)*\/([^?\n]+)(?:\?)?.*\n*$", RegexOptions.IgnoreCase);
+            Match match = Regex.Match(message, @"^.*?(?:https?):\/\/(?:.*\.)?(artstation)(?:\.com\/)(?:artwork|projects?)*\/([^?\n]+)(?:\?)?.*\n*$", RegexOptions.IgnoreCase);
             return match.Success ? match : null;
         }
     }
