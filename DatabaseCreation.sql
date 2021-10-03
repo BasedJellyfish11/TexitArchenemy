@@ -185,6 +185,34 @@ CREATE TABLE
 		)
 GO
 
+CREATE TABLE
+	draw_a_box_warmups(
+		warmup VARCHAR(50) NOT NULL,
+		lesson int NOT NULL
+		)
+GO
+
+INSERT INTO
+	draw_a_box_warmups (warmup, lesson)
+VALUES
+	('Superimposed Lines',1),
+	('Table of Ellipses',1),
+	('Ellipses in Planes', 1),
+	('Funnels', 1),
+	('Plotted Perspective', 1),
+	('Rough Perspective',1),
+	('Rotated Boxes', 1),
+	('Organic Perspective', 1)
+
+GO
+
+CREATE TABLE
+	draw_a_box_box_challenge(
+		discord_user_id VARCHAR(20) PRIMARY KEY,
+		number int NOT NULL
+		)
+GO
+
 /* This one seems really bad and like it could be abstracted to reutilize the query code, but this is my first time writing a stored procedure so I have no idea how haha yeah */
 /* Anyway this checks if a link was already posted and returns a table with either the message id of the post where it was posted or just '-1' if it wasn't (so -1 is actually the good result I guess? */
 
@@ -369,6 +397,21 @@ CREATE PROCEDURE get_discord_creds
 			discord_auth
 	END
 GO
+
+CREATE PROCEDURE get_box_warmup
+	@lesson int
+	AS
+	BEGIN
+		SELECT
+			warmup
+		FROM
+			draw_a_box_warmups
+		WHERE
+			lesson <= @lesson
+	END
+GO
+
+EXEC get_box_warmup @lesson = 1
 
 /* If we stop checking for reposts it makes no sense to keep the old ones */
 CREATE TRIGGER repost_cleanup ON discord_channels

@@ -165,7 +165,65 @@ namespace TexitArchenemy.Services.DB
             return toReturn;
         }
         
+        public static async Task<List<string?>> GetBoxWarmup(int level)
+        {
+            await using SqlConnection connection = new(CONNECTION_STRING);
+            
+            SqlParameter[] parameters =
+            {
+                new($"@{GetBoxWarmupParams.lesson}", SqlDbType.Int)
+            };
+            parameters[0].Value = level;
+
+            SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_box_warmup,connection, parameters);
+
+            List<string?> warmups = new();
+            while (reader.Read())
+            {
+                warmups.Add(reader[BoxWarmupColumns.warmup].ToString());
+            }
+            
+            return warmups;
+
+        }
         
+        public static async Task<int> UpdateBoxChallengeProgress(int boxesDrawn, SocketUser user)
+        {
+            await using SqlConnection connection = new(CONNECTION_STRING);
+            
+            SqlParameter[] parameters =
+            {
+                new($"@{UpdateBoxChallengeProgressParams.user_id}", SqlDbType.VarChar),
+                new($"@{UpdateBoxChallengeProgressParams.boxes_drawn}", SqlDbType.Int)
+            };
+            parameters[0].Value = user.Id.ToString();
+            parameters[1].Value = boxesDrawn;
+
+            SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.update_box_challenge_progress,connection, parameters);
+
+            reader.Read();
+            
+            return (int)reader[BoxChallengeColumns.boxes_drawn];
+
+        }
+        
+        public static async Task<int> GetBoxChallengeProgress(SocketUser user)
+        {
+            await using SqlConnection connection = new(CONNECTION_STRING);
+            
+            SqlParameter[] parameters =
+            {
+                new($"@{UpdateBoxChallengeProgressParams.user_id}", SqlDbType.VarChar),
+            };
+            parameters[0].Value = user.Id.ToString();
+
+            SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_box_challenge_progress,connection, parameters);
+
+            reader.Read();
+            
+            return (int)reader[BoxChallengeColumns.boxes_drawn];
+
+        }
         
         #region helper functions
         private static async Task<SqlDataReader> ExecuteReturnQueryProcedure(string procedure_name, SqlConnection conn, SqlParameter[]? parameters = null)

@@ -11,6 +11,9 @@
         public const string get_twitter_creds = nameof(get_twitter_creds);
         public const string get_twitter_rules = nameof(get_twitter_rules);
         public const string get_twitter_rule_channels = nameof(get_twitter_rule_channels);
+        public const string get_box_warmup = nameof(get_box_warmup);
+        public const string update_box_challenge_progress = nameof(update_box_challenge_progress);
+        public const string get_box_challenge_progress = nameof(get_box_challenge_progress);
     }
 
 
@@ -20,6 +23,18 @@
     {
         public const string token = nameof(token);
     }    
+    
+    public static class BoxWarmupColumns
+    {
+        public const string warmup = nameof(warmup);
+        public const string level = nameof(level);
+    }    
+    
+    public static class BoxChallengeColumns
+    {
+        public const string user_id = nameof(user_id);
+        public const string boxes_drawn = nameof(boxes_drawn);
+    }   
     
     public static class TwitterAuthColumns
     {
@@ -105,7 +120,20 @@
     {
     }
     
+    public static class GetBoxWarmupParams
+    {
+        public const string lesson = nameof(lesson);
+    }
     
+    public static class UpdateBoxChallengeProgressParams
+    {
+        public const string boxes_drawn = nameof(boxes_drawn);
+        public const string user_id = nameof(user_id);
+    }
+    public static class GetBoxChallengeProgressParams
+    {
+        public const string user_id = nameof(user_id);
+    }
     #endregion
     
 
