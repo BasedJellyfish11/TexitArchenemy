@@ -115,7 +115,7 @@ namespace TexitArchenemy.Services.Discord
         }
         private Match? MatchPixiv(string message)
         {
-            Match match = Regex.Match(message, @"^.*?(?:https?):\/\/(?:www\.)?(pixiv)(?:\.net\/)(?:.*?)*(\d+).*$", RegexOptions.IgnoreCase);
+            Match match = Regex.Match(message, @"^.*?(?:https?):\/\/(?:www\.)?(pixiv)(?:\.net\/)(?:[\w|\/|\.|\?|\&|\=]*?)*(\d+).*$", RegexOptions.IgnoreCase);
             return match.Success ? match : null;
         }
         private Match? MatchArtstation(string message)
