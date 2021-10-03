@@ -208,8 +208,8 @@ GO
 
 CREATE TABLE
 	draw_a_box_box_challenge(
-		discord_user_id VARCHAR(20) PRIMARY KEY,
-		number int NOT NULL
+		user_id VARCHAR(20) PRIMARY KEY,
+		boxes_drawn int NOT NULL
 		)
 GO
 
@@ -300,6 +300,9 @@ CREATE PROCEDURE add_twitter_rule
 AS
 BEGIN
 	
+	DECLARE @actually_added AS BIT
+	SET @actually_added = 0
+
 	IF (SELECT COUNT(*) FROM discord_channels WHERE channel_id = @channel_id) = 0
 	BEGIN
 		INSERT INTO
@@ -314,6 +317,8 @@ BEGIN
 			twitter_rules
 		VALUES
 			(@rule_value)
+
+		SET @actually_added = 1
 	END
 
 	BEGIN
@@ -325,11 +330,11 @@ BEGIN
 			VALUES
 				(@tag, @channel_id)
 
-			SELECT @tag AS tag
+			SELECT @tag AS tag, @actually_added AS added
 			RETURN 
 		END TRY 
 		BEGIN CATCH
-			SELECT -1 AS tag
+			SELECT -1 AS tag, 0 AS added
 			RETURN(-1)
 		END CATCH
 	END
@@ -411,8 +416,108 @@ CREATE PROCEDURE get_box_warmup
 	END
 GO
 
-EXEC get_box_warmup @lesson = 1
+CREATE PROCEDURE update_box_challenge_progress
+	@user_id VARCHAR(20),
+	@boxes_drawn INT
+	AS
+	BEGIN
+		IF (SELECT COUNT(*) FROM draw_a_box_box_challenge WHERE user_id = @user_id) = 0
+		BEGIN
+			INSERT INTO 
+				draw_a_box_box_challenge (user_id, boxes_drawn)
+			VALUES
+				(@user_id, @boxes_drawn)
+		END
+		ELSE
+		BEGIN
+			UPDATE 
+				draw_a_box_box_challenge
+			SET
+				boxes_drawn = (SELECT MAX(boxes_drawn) FROM (VALUES(boxes_drawn + @boxes_drawn), (0)) AS boxes(boxes_drawn))
+			WHERE
+				user_id = @user_id
+		END
+		
+		SELECT
+			boxes_drawn
+		FROM
+			draw_a_box_box_challenge
+		WHERE
+			user_id = @user_id
+	END
+GO
 
+CREATE PROCEDURE get_box_challenge_progress
+	@user_id VARCHAR(20)
+	AS
+	BEGIN
+		IF (SELECT COUNT(*) FROM draw_a_box_box_challenge WHERE user_id = @user_id) = 0
+		BEGIN
+			SELECT 0 AS boxes_drawn
+			RETURN
+		END
+		ELSE
+		BEGIN
+			SELECT
+				boxes_drawn
+			FROM
+				draw_a_box_box_challenge
+			WHERE
+				user_id = @user_id
+		END
+	END
+GO
+
+CREATE PROCEDURE is_repost_channel
+	@channel_id VARCHAR(20)
+	AS
+	BEGIN
+		IF (SELECT COUNT(*) FROM discord_channels WHERE channel_id = @channel_id) = 0
+		BEGIN
+			SELECT 0 AS repost_check
+			RETURN
+		END
+		ELSE
+		BEGIN
+			SELECT
+				repost_check
+			FROM
+				discord_channels
+			WHERE
+				channel_id = @channel_id
+		END
+	END
+GO
+
+CREATE PROCEDURE mark_as_repost_channel
+	@channel_id VARCHAR(20),
+	@guild_id VARCHAR(20)
+	AS
+	BEGIN
+		IF (SELECT COUNT(*) FROM discord_channels WHERE channel_id = @channel_id) = 0
+		BEGIN
+			INSERT INTO	discord_channels (
+				channel_id, 
+				channel_type_id, 
+				guild_id, 
+				pixiv_expand, 
+				repost_check
+				)
+			VALUES 
+				(@channel_id, 1, @guild_id, 0, 1)
+		END
+		ELSE
+		BEGIN
+			UPDATE 
+				discord_channels
+			SET
+				repost_check = 1
+			WHERE
+				channel_id = @channel_id
+
+		END
+	END
+GO
 /* If we stop checking for reposts it makes no sense to keep the old ones */
 CREATE TRIGGER repost_cleanup ON discord_channels
 	AFTER UPDATE AS

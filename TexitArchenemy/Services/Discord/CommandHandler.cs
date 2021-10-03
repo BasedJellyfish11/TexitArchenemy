@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
 using TexitArchenemy.Services.Database;
+using TexitArchenemy.Services.Logger;
 
 namespace TexitArchenemy.Services.Discord
 {
@@ -44,7 +47,8 @@ namespace TexitArchenemy.Services.Discord
             int argPos = 0;
 
             // Determine if the message is a command based on the prefix and make sure no bots trigger commands
-            if (message.Author.IsBot)
+            
+            if (message.Author.IsBot && message.Author.Id != _client.CurrentUser.Id)
                 return;
             
             // Create a WebSocket-based command context based on the message
@@ -63,11 +67,61 @@ namespace TexitArchenemy.Services.Discord
 
         private async Task CheckNonCommand(SocketCommandContext context)
         {
-            if (context.Message.Content.ToLower() == "test")
+            string message = context.Message.Content.ToLower();
+            if (message  == "test")
             {
-                await context.Channel.SendMessageAsync($"{context.Message.Author.Mention} How about you test these nuts");
+                await Task.WhenAll(context.Channel.SendMessageAsync($"{context.Message.Author.Mention} How about you test these nuts"), 
+                                   ArchenemyLogger.Log($"Fucking got fool {context.Message.Author} in channel {context.Message.Channel} (ID {context.Message.Channel.Id} with Test service", "Discord"));
             }
 
+            else if (await SQLInteracter.IsRepostChannel(context.Channel.Id))
+                await EnsureNotRepost(message, context);
+            
+        }
+
+        private async Task EnsureNotRepost(string message, SocketCommandContext context)
+        {
+            await ArchenemyLogger.Log("A message was posted in a no repost channel! Checking...", "Discord");
+            Match? match = AttemptMatchArtLink(message);
+            if (match == null)
+            {
+                await ArchenemyLogger.Log("The message wasn't an art link", "Discord");
+                return;
+            }
+
+            await ArchenemyLogger.Log($"The message was matched to be an art link! Platform: {match.Groups[1].Value}, ID: {match.Groups[2].Value}. Checking for repost in channel {context.Channel} with ID {context.Channel.Id}", "Discord");
+            
+            (ulong messageId, ulong channelId)? isRepost = await SQLInteracter.CheckRepost(context.Message, match.Groups[2].Value, Enum.Parse<LinkTypes>(match.Groups[1].Value, true));
+            if (!isRepost.HasValue)
+            {
+                await ArchenemyLogger.Log("Message wasn't a repost", "Discord");
+                return;
+            }
+
+            await Task.WhenAll(context.Channel.SendMessageAsync($"{context.Message.Author.Username} repost arc", allowedMentions: new AllowedMentions() { MentionRepliedUser = false }, messageReference: new MessageReference(isRepost.Value.messageId, isRepost.Value.channelId))
+                               ,ArchenemyLogger.Log("The message was a repost lmao gottem", "Discord"));
+        }
+        
+        private Match? AttemptMatchArtLink(string message)
+        {
+            return MatchTwitter(message) ?? (MatchPixiv(message) ?? MatchArtstation(message));
+            
+        }
+
+        private Match? MatchTwitter(string message)
+        {
+            Match match = Regex.Match(message, @"^(?:http\w?):\/\/(?:www\.|mobile\.)?(twitter)(?:\.com\/)(?:.*?\/)?(?:status|statuses)\/(\d*).*$", RegexOptions.IgnoreCase);
+            return match.Success ? match : null;
+        }
+        private Match? MatchPixiv(string message)
+        {
+            Match match = Regex.Match(message, @"^(?:http\w?):\/\/(?:www\.)?(pixiv)(?:\.net\/)(?:.*?)*(\d+).*$", RegexOptions.IgnoreCase);
+            return match.Success ? match : null;
+        }
+        private Match? MatchArtstation(string message)
+        {
+            Match match = Regex.Match(message, @"^(?:https?):\/\/(?:.*\.)?(artstation)(?:\.com\/)(?:artwork|projects?)*\/([^?\n]+)(?:\?)?.*\n*$", RegexOptions.IgnoreCase);
+            return match.Success ? match : null;
         }
     }
 }

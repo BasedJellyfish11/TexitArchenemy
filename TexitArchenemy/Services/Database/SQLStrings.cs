@@ -14,6 +14,9 @@
         public const string get_box_warmup = nameof(get_box_warmup);
         public const string update_box_challenge_progress = nameof(update_box_challenge_progress);
         public const string get_box_challenge_progress = nameof(get_box_challenge_progress);
+        public const string is_repost_channel = nameof(is_repost_channel);
+        public const string mark_as_repost_channel = nameof(mark_as_repost_channel);
+        public const string preemptive_repost_check = nameof(preemptive_repost_check);
     }
 
 
@@ -89,6 +92,12 @@
         public const string link_id = nameof(link_id);
         public const string link_type_description = nameof(link_type_description);
     }
+    public static class PreemptiveRepostCheckParams
+    {
+        public const string channel_id = nameof(channel_id);
+        public const string link_id = nameof(link_id);
+        public const string link_type_description = nameof(link_type_description);
+    }
     
     public static class AddTwitterRuleParams
     {
@@ -133,6 +142,17 @@
     public static class GetBoxChallengeProgressParams
     {
         public const string user_id = nameof(user_id);
+    }
+    
+    public static class IsRepostChannelParams
+    {
+        public const string channel_id = nameof(channel_id);
+    }
+    
+    public static class MarkAsRepostChannelParams
+    {
+        public const string channel_id = nameof(channel_id);
+        public const string guild_id = nameof(guild_id);
     }
     #endregion
     

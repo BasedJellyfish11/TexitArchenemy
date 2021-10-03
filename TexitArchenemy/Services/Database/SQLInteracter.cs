@@ -90,7 +90,7 @@ namespace TexitArchenemy.Services.Database
             parameters[2].Value = linkId;
             parameters[3].Value = linkType.ToString();
             
-            await using SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.check_repost, connection);
+            await using SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.check_repost, connection, parameters);
             
             if(!reader.HasRows)
                 throw new InvalidOperationException(NoRowsError(ProcedureNames.check_repost));
@@ -102,6 +102,31 @@ namespace TexitArchenemy.Services.Database
             if (stringTuple.Item1 == "-1" || stringTuple.Item2 == "-1")
                 return null;
             return (ulong.Parse(stringTuple.Item1), ulong.Parse(stringTuple.Item2));
+
+        }
+        
+        public static async Task<bool> PreemptiveRepostCheck(ulong channelId, string linkId, LinkTypes linkType )
+        {
+            await using SqlConnection connection = new(CONNECTION_STRING);
+            SqlParameter[] parameters =
+            {
+                new($"@{PreemptiveRepostCheckParams.channel_id}", SqlDbType.VarChar),
+                new($"@{PreemptiveRepostCheckParams.link_id}", SqlDbType.VarChar),
+                new($"@{PreemptiveRepostCheckParams.link_type_description}", SqlDbType.VarChar),
+            };
+            
+            parameters[0].Value = channelId.ToString();
+            parameters[1].Value = linkId;
+            parameters[2].Value = linkType.ToString();
+            
+            await using SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.preemptive_repost_check, connection, parameters);
+            
+            if(!reader.HasRows)
+                throw new InvalidOperationException(NoRowsError(ProcedureNames.check_repost));
+
+            reader.Read();
+
+            return (int)reader["repost_number"] == 0;
 
         }
         
@@ -138,7 +163,7 @@ namespace TexitArchenemy.Services.Database
             HashSet<ulong> channelsForRule = new();
             while (reader.Read())
             {
-                channelsForRule.Add(ulong.Parse((string) reader[RuleChannelRelationColumns.channel_id]));
+                channelsForRule.Add(ulong.Parse((string)reader[RuleChannelRelationColumns.channel_id]));
             }
 
             return channelsForRule;
@@ -225,6 +250,37 @@ namespace TexitArchenemy.Services.Database
 
         }
         
+        public static async Task<bool> IsRepostChannel(ulong channelID)
+        {
+            await using SqlConnection connection = new(CONNECTION_STRING);
+            
+            SqlParameter[] parameters =
+            {
+                new($"@{IsRepostChannelParams.channel_id}", SqlDbType.VarChar),
+            };
+            parameters[0].Value = channelID.ToString();
+
+            SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.is_repost_channel,connection, parameters);
+
+            reader.Read();
+            
+            return (bool)reader[DiscordChannelsColumns.repost_check];
+        }
+        public static async Task MarkAsRepostChannel(SocketGuildChannel contextChannel)
+        { 
+                        
+            SqlParameter[] parameters =
+            {
+                new($"@{MarkAsRepostChannelParams.channel_id}", SqlDbType.VarChar),
+                new($"@{MarkAsRepostChannelParams.guild_id}", SqlDbType.VarChar)
+
+            };
+            parameters[0].Value = contextChannel.Id.ToString();
+            parameters[1].Value = contextChannel.Guild.Id.ToString();
+            
+            await ExecuteReturnValueProcedure(ProcedureNames.mark_as_repost_channel, parameters);
+        }
+        
         #region helper functions
         private static async Task<SqlDataReader> ExecuteReturnQueryProcedure(string procedure_name, SqlConnection conn, SqlParameter[]? parameters = null)
         {
@@ -245,8 +301,11 @@ namespace TexitArchenemy.Services.Database
             SqlCommand sqlComm = new(procedure_name, conn) {CommandType = CommandType.StoredProcedure};
             if (parameters != null)
                 sqlComm.Parameters.AddRange(parameters);
+            SqlParameter? returnValueIndex = sqlComm.Parameters.Add("@RETURN_VALUE", SqlDbType.Int);
+            returnValueIndex.Direction = ParameterDirection.ReturnValue;
+            
             await sqlComm.ExecuteNonQueryAsync();
-            return (int) sqlComm.Parameters["@RETURN_VALUE"].Value;
+            return (int) returnValueIndex.Value;
         }
 
         private static string NoRowsError(string procedure)
@@ -255,5 +314,6 @@ namespace TexitArchenemy.Services.Database
         }
 
         #endregion
+        
     }
 }

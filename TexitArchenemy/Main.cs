@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using Discord.WebSocket;
 using TexitArchenemy.Services.Database;
 using TexitArchenemy.Services.Discord;
 using TexitArchenemy.Services.Logger;
@@ -48,12 +50,12 @@ namespace TexitArchenemy
                 channelsToSend.UnionWith(await SQLInteracter.GetTwitterRuleChannels(int.Parse(rule.Tag)));
             }
 
+            string tweetID = tweet.ReferencedTweets[0]?.Type == "retweeted" ? tweet.ReferencedTweets[0].Id : tweet.Id;
+            
             foreach (ulong channelID in channelsToSend)
-            {            
-                if (tweet.ReferencedTweets[0]?.Type == "retweeted")
-                    await _botMain!.SendMessage($"https://twitter.com/twitter/status/{tweet.ReferencedTweets[0].Id}", channelID);
-                else
-                    await _botMain!.SendMessage($"https://twitter.com/twitter/status/{tweet.Id}", channelID);
+            {
+                if (!(await SQLInteracter.IsRepostChannel(channelID) && (!await SQLInteracter.PreemptiveRepostCheck(channelID, tweetID, LinkTypes.Twitter))))
+                    await _botMain!.SendMessage($"https://twitter.com/twitter/status/{tweetID}", channelID);
             }
             
         }
