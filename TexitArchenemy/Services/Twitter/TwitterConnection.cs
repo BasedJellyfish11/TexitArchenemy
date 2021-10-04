@@ -28,7 +28,7 @@ namespace TexitArchenemy.Services.Twitter
         public TwitterConnection(TwitterAuth auth) : this(auth.apiKey, auth.apiSecret, auth.apiToken) { }
          
 
-         public async Task StartStream(EventHandler<Tweetinvi.Events.V2.FilteredStreamTweetV2EventArgs> toHook)
+         public async Task StartStream(EventHandler<Tweetinvi.Events.V2.FilteredStreamTweetV2EventArgs> toHook, int secondsDelay = 0)
         {
             // Delete and readd rules
 
@@ -44,24 +44,20 @@ namespace TexitArchenemy.Services.Twitter
 
             // Need to wait a bit after adding the rules - Twitter literally says "a minute" so let's take that at face value
             await Task.Delay(60 * 1000);
-            while (true)
-            {
-                await ArchenemyLogger.Log("Starting stream", "Twitter");
+            await Task.Delay(secondsDelay * 1000);
+            await ArchenemyLogger.Log("Starting stream", "Twitter");
 
-                try {
-                    await stream.StartAsync(); // This only finishes on disconnection and it's by throwing
-                }
-                catch (IOException e)
-                {
-                    await ArchenemyLogger.Log($"Stream was disconnected! Exception was {e} Waiting...", "Twitter");
-                    await Task.Delay(60 * 1000);
-                } 
-
+            try {
+                await stream.StartAsync(); // This only finishes on disconnection and it's by throwing
             }
+            catch (IOException e)
+            {
+                await ArchenemyLogger.Log($"Stream was disconnected! Exception was {e} Waiting...", "Twitter");
+            } 
 
         }
-         
-        private static async Task<HashSet<TwitterRule>> DeserializeRules()
+
+         private static async Task<HashSet<TwitterRule>> DeserializeRules()
         {
             return await SQLInteracter.GetTwitterRules();
         }
@@ -84,9 +80,10 @@ namespace TexitArchenemy.Services.Twitter
             return ruleValue;
         }
 
-        public void Disconnect()
+        public async Task Disconnect()
         {
             stream?.StopStream();
+            await ArchenemyLogger.Log("Stream has been stopped through code", "Twitter");
         }
 
     }

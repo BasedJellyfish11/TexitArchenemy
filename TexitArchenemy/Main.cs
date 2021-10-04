@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
-using Discord.WebSocket;
 using TexitArchenemy.Services.Database;
 using TexitArchenemy.Services.Discord;
 using TexitArchenemy.Services.Logger;
@@ -16,6 +14,7 @@ namespace TexitArchenemy
     {
         private static DiscordBotMain? _botMain;
         private static TwitterConnection? _twitter;
+        private static int _streamReconnectionWaitTime;
         private static async Task Main()
         {
             _botMain = new DiscordBotMain();
@@ -25,10 +24,13 @@ namespace TexitArchenemy
             AppDomain.CurrentDomain.ProcessExit += End;
             
             await _botMain.Connect(await SQLInteracter.GetDiscordToken());
-            Task twitterStream = _twitter.StartStream(PostTweet);
-            
-            
-            await Task.WhenAll(twitterStream);
+            _streamReconnectionWaitTime = 0;
+            while (true)
+            {
+                await _twitter.StartStream(PostTweet, _streamReconnectionWaitTime);
+                await _twitter.Disconnect();
+                _streamReconnectionWaitTime = _streamReconnectionWaitTime == 0? _streamReconnectionWaitTime + 60:  _streamReconnectionWaitTime *2;
+            }
             
             await End();
             
@@ -41,9 +43,11 @@ namespace TexitArchenemy
             if (tweet == null)
             {
                 await ArchenemyLogger.Log($"A non tweet (probably an event) was received!. The JSON reads as follows: {Environment.NewLine} {args.Json}", "Twitter");
+                await (_twitter?.Disconnect() ?? Task.CompletedTask);
                 return;
             }
 
+            _streamReconnectionWaitTime = 0;
             HashSet<ulong> channelsToSend = new();
             foreach (FilteredStreamMatchingRuleV2? rule in args.MatchingRules)
             {
