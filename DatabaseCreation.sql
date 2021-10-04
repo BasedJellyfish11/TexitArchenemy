@@ -268,7 +268,28 @@ BEGIN
 END
 
 GO
-				
+			
+CREATE PROCEDURE preemptive_repost_check 
+	@channel_id VARCHAR(20),
+	@link_id VARCHAR(20),
+	@link_type_description VARCHAR(20)
+
+AS
+BEGIN
+	SELECT
+		COUNT(*) AS repost_number
+	FROM 
+		repost_repository
+	INNER JOIN link_types 
+		ON  repost_repository.link_type_id = link_types.link_type_id
+	WHERE
+		channel_id = @channel_id AND
+		link_id = @link_id AND
+		link_type_description = @link_type_description
+END
+
+GO
+					
 
 /* Yeet the channels that just aren't used. Only called in triggers */
 CREATE PROCEDURE remove_useless_channels
@@ -423,10 +444,21 @@ CREATE PROCEDURE update_box_challenge_progress
 	BEGIN
 		IF (SELECT COUNT(*) FROM draw_a_box_box_challenge WHERE user_id = @user_id) = 0
 		BEGIN
-			INSERT INTO 
-				draw_a_box_box_challenge (user_id, boxes_drawn)
-			VALUES
-				(@user_id, @boxes_drawn)
+			IF @boxes_drawn < 0
+			BEGIN
+				
+				INSERT INTO 
+					draw_a_box_box_challenge (user_id, boxes_drawn)
+				VALUES
+					(@user_id, 0)
+			END
+			ELSE
+			BEGIN
+				INSERT INTO 
+					draw_a_box_box_challenge (user_id, boxes_drawn)
+				VALUES
+					(@user_id, @boxes_drawn)
+			END
 		END
 		ELSE
 		BEGIN
@@ -474,7 +506,7 @@ CREATE PROCEDURE is_repost_channel
 	BEGIN
 		IF (SELECT COUNT(*) FROM discord_channels WHERE channel_id = @channel_id) = 0
 		BEGIN
-			SELECT 0 AS repost_check
+			SELECT CONVERT(BIT, 0) AS repost_check
 			RETURN
 		END
 		ELSE

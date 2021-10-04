@@ -67,7 +67,9 @@ namespace TexitArchenemy.Services.Discord
 
         private async Task CheckNonCommand(SocketCommandContext context)
         {
-            string message = context.Message.Content.ToLower();
+            string? message = context.Message.Content?.ToLower();
+            if(message == null)
+                return;
             if (message  == "test")
             {
                 await Task.WhenAll(context.Channel.SendMessageAsync($"{context.Message.Author.Mention} How about you test these nuts"), 
@@ -79,7 +81,7 @@ namespace TexitArchenemy.Services.Discord
             
         }
 
-        private async Task EnsureNotRepost(string message, SocketCommandContext context)
+        private async Task EnsureNotRepost(string? message, SocketCommandContext context)
         {
             await ArchenemyLogger.Log("A message was posted in a no repost channel! Checking...", "Discord");
             Match? match = AttemptMatchArtLink(message);
@@ -102,24 +104,30 @@ namespace TexitArchenemy.Services.Discord
                                ,ArchenemyLogger.Log("The message was a repost lmao gottem", "Discord"));
         }
         
-        private Match? AttemptMatchArtLink(string message)
+        private Match? AttemptMatchArtLink(string? message)
         {
             return MatchTwitter(message) ?? (MatchPixiv(message) ?? MatchArtstation(message));
             
         }
 
-        private Match? MatchTwitter(string message)
+        private Match? MatchTwitter(string? message)
         {
+            if (message == null)
+                return null;
             Match match = Regex.Match(message, @"^.*?(?:https?):\/\/(?:www\.|mobile\.|m\.)?(?:fx)?(twitter)(?:\.com\/)(?:[\w]*?\/)?(?:status|statuses)\/(\d+).*$", RegexOptions.IgnoreCase);
             return match.Success ? match : null;
         }
-        private Match? MatchPixiv(string message)
+        private Match? MatchPixiv(string? message)
         {
+            if (message == null)
+                return null;
             Match match = Regex.Match(message, @"^.*?(?:https?):\/\/(?:www\.)?(pixiv)(?:\.net\/)(?:[\w|\/|\.|\?|\&|\=]*?)*(\d+).*$", RegexOptions.IgnoreCase);
             return match.Success ? match : null;
         }
-        private Match? MatchArtstation(string message)
+        private Match? MatchArtstation(string? message)
         {
+            if (message == null)
+                return null;
             Match match = Regex.Match(message, @"^.*?(?:https?):\/\/(?:.*\.)?(artstation)(?:\.com\/)(?:artwork|projects?)*\/([^?\n]+)(?:\?)?.*\n*$", RegexOptions.IgnoreCase);
             return match.Success ? match : null;
         }
