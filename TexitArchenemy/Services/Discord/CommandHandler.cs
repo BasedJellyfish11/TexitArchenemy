@@ -1,4 +1,6 @@
 ﻿using System;
+using System.IO;
+using System.Net;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -52,7 +54,7 @@ namespace TexitArchenemy.Services.Discord
                 return;
             
             // Create a WebSocket-based command context based on the message
-            SocketCommandContext? context = new(_client, message);
+            SocketCommandContext context = new(_client, message);
             if (!message.HasCharPrefix('!', ref argPos))
             {
                 await CheckNonCommand(context);
@@ -67,18 +69,49 @@ namespace TexitArchenemy.Services.Discord
 
         private async Task CheckNonCommand(SocketCommandContext context)
         {
+            await ArchenemyLogger.Log($"Handling message {context.Message} from channel {context.Channel}", "Discord");
             string? message = context.Message.Content?.ToLower();
             if(message == null)
                 return;
-            if (message  == "test" && context.Message.Author.Id != _client.CurrentUser.Id)
+            if (context.Message.Author.Id != _client.CurrentUser.Id)
             {
-                await context.Channel.SendMessageAsync($"{context.Message.Author.Mention} How about you test these nuts"); 
-                await ArchenemyLogger.Log($"Fucking got fool {context.Message.Author} in channel {context.Message.Channel} (ID {context.Message.Channel.Id} with Test service", "Discord");
+                if (message == "test")
+                {
+                    await context.Channel.SendMessageAsync($"{context.Message.Author.Mention} How about you test these nuts");
+                    await ArchenemyLogger.Log
+                    (
+                        $"Fucking got fool {context.Message.Author} in channel {context.Message.Channel} (ID {context.Message.Channel.Id}) with Test service",
+                        "Discord"
+                    );
+                }
+
+                else if (Regex.IsMatch(message, @"^(?:\w*\s+)*dn(?:\s+\w*)*$"))
+                {
+                    string acronym = await GetDnAcronym();
+                    await context.Channel.SendMessageAsync($"Does dn stand for {acronym} or");
+                    await ArchenemyLogger.Log($"dn means {acronym}, actually (channel {context.Message.Channel} (ID {context.Message.Channel.Id})", "Discord");
+
+                }
             }
 
             else if (await SQLInteracter.IsRepostChannel(context.Channel.Id))
                 await EnsureNotRepost(message, context);
             
+        }
+
+        private async Task<string> GetDnAcronym()
+        {
+            WebRequest adjectiveRequest = WebRequest.Create("https://random-word-form.herokuapp.com/random/adjective/d");
+            await using Stream webStreamAdjective = (await adjectiveRequest.GetResponseAsync()).GetResponseStream();
+            using StreamReader readerAdjective = new(webStreamAdjective);
+            string adjective = (await readerAdjective.ReadToEndAsync()).Trim('[', '"', ']');
+            
+            
+            WebRequest nounRequest = WebRequest.Create("https://random-word-form.herokuapp.com/random/noun/n");
+            await using Stream webStreamNoun = (await nounRequest.GetResponseAsync()).GetResponseStream();
+            using StreamReader readerNoun = new(webStreamNoun);
+            string noun = (await readerNoun.ReadToEndAsync()).Trim('[', '"', ']');
+            return $"{adjective} {noun}";
         }
 
         private async Task EnsureNotRepost(string? message, SocketCommandContext context)
