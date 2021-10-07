@@ -57,7 +57,7 @@ namespace TexitArchenemy.Services.Discord
             {
                 await CheckNonCommand(context);
             }
-            else
+            else if(message.Author.Id != _client.CurrentUser.Id)
             {
                 // Execute the command with the command context we just
                 // created, along with the service provider for precondition checks.
@@ -70,10 +70,10 @@ namespace TexitArchenemy.Services.Discord
             string? message = context.Message.Content?.ToLower();
             if(message == null)
                 return;
-            if (message  == "test")
+            if (message  == "test" && context.Message.Author.Id != _client.CurrentUser.Id)
             {
-                await Task.WhenAll(context.Channel.SendMessageAsync($"{context.Message.Author.Mention} How about you test these nuts"), 
-                                   ArchenemyLogger.Log($"Fucking got fool {context.Message.Author} in channel {context.Message.Channel} (ID {context.Message.Channel.Id} with Test service", "Discord"));
+                await context.Channel.SendMessageAsync($"{context.Message.Author.Mention} How about you test these nuts"); 
+                await ArchenemyLogger.Log($"Fucking got fool {context.Message.Author} in channel {context.Message.Channel} (ID {context.Message.Channel.Id} with Test service", "Discord");
             }
 
             else if (await SQLInteracter.IsRepostChannel(context.Channel.Id))
