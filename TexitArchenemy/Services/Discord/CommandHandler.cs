@@ -16,7 +16,7 @@ namespace TexitArchenemy.Services.Discord
     {
         private readonly DiscordSocketClient _client;
         private readonly CommandService _commands;
-
+        private readonly Random random = new();
         // Retrieve client and CommandService instance via ctor
         public CommandHandler(DiscordSocketClient client, CommandService commands)
         {
@@ -85,12 +85,17 @@ namespace TexitArchenemy.Services.Discord
                     );
                 }
 
-                else if (Regex.IsMatch(message, @"^(?:\w*\s+)*dn(?:\s+\w*)*$"))
+                if (Regex.IsMatch(message, @"^(?:\S*\s+)*dn(?:\S+\w*)*$"))
                 {
-                    string acronym = await GetDnAcronym();
-                    await context.Channel.SendMessageAsync($"Does dn stand for {acronym} or");
-                    await ArchenemyLogger.Log($"dn means {acronym}, actually (channel {context.Message.Channel} (ID {context.Message.Channel.Id})", "Discord");
-
+                    int a = random.Next(50);
+                    await ArchenemyLogger.Log($"Message contained dn! Rolled a {a} as random chance number", "Discord");
+                    if (random.Next(50) == 25)
+                    {
+                        string acronym = await GetDnAcronym();
+                        await context.Channel.SendMessageAsync($"Does dn stand for {acronym} or");
+                        await ArchenemyLogger.Log
+                            ($"dn means {acronym}, actually (channel {context.Message.Channel} (ID {context.Message.Channel.Id})", "Discord");
+                    }
                 }
             }
 
@@ -99,22 +104,18 @@ namespace TexitArchenemy.Services.Discord
             
         }
 
-        private async Task<string> GetDnAcronym()
+        
+        
+        private static async Task<string> GetDnAcronym()
         {
-            WebRequest adjectiveRequest = WebRequest.Create("https://random-word-form.herokuapp.com/random/adjective/d");
-            await using Stream webStreamAdjective = (await adjectiveRequest.GetResponseAsync()).GetResponseStream();
-            using StreamReader readerAdjective = new(webStreamAdjective);
-            string adjective = (await readerAdjective.ReadToEndAsync()).Trim('[', '"', ']');
-            
-            
-            WebRequest nounRequest = WebRequest.Create("https://random-word-form.herokuapp.com/random/noun/n");
-            await using Stream webStreamNoun = (await nounRequest.GetResponseAsync()).GetResponseStream();
-            using StreamReader readerNoun = new(webStreamNoun);
-            string noun = (await readerNoun.ReadToEndAsync()).Trim('[', '"', ']');
-            return $"{adjective} {noun}";
+            Task<string> adjectiveRequest = WordWebRequest("https://random-word-form.herokuapp.com/random/adjective/d");
+            Task<string> nounRequest = WordWebRequest("https://random-word-form.herokuapp.com/random/noun/n");
+
+            await Task.WhenAll(adjectiveRequest, nounRequest);
+            return $"{await adjectiveRequest} {await nounRequest}";
         }
 
-        private async Task EnsureNotRepost(string? message, SocketCommandContext context)
+        private static async Task EnsureNotRepost(string? message, SocketCommandContext context)
         {
             await ArchenemyLogger.Log("A message was posted in a no repost channel! Checking...", "Discord");
             Match? match = AttemptMatchArtLink(message);
@@ -136,28 +137,37 @@ namespace TexitArchenemy.Services.Discord
             await Task.WhenAll(context.Channel.SendMessageAsync($"{context.Message.Author.Username} repost arc", allowedMentions: new AllowedMentions() { MentionRepliedUser = false }, messageReference: new MessageReference(isRepost.Value.messageId, isRepost.Value.channelId))
                                ,ArchenemyLogger.Log("The message was a repost lmao gottem", "Discord"));
         }
+
+        private static async Task<string> WordWebRequest(string url)
+        {
+            WebRequest request = WebRequest.Create(url);
+            await using Stream webStream = (await request.GetResponseAsync()).GetResponseStream();
+            using StreamReader reader = new(webStream);
+            return (await reader.ReadToEndAsync()).Trim('[', '"', ']');
+        }
+
         
-        private Match? AttemptMatchArtLink(string? message)
+        private static Match? AttemptMatchArtLink(string? message)
         {
             return MatchTwitter(message) ?? (MatchPixiv(message) ?? MatchArtstation(message));
             
         }
 
-        private Match? MatchTwitter(string? message)
+        private static Match? MatchTwitter(string? message)
         {
             if (message == null)
                 return null;
             Match match = Regex.Match(message, @"^.*?(?:https?):\/\/(?:www\.|mobile\.|m\.)?(?:fx)?(twitter)(?:\.com\/)(?:[\w]*?\/)?(?:status|statuses)\/(\d+).*$", RegexOptions.IgnoreCase);
             return match.Success ? match : null;
         }
-        private Match? MatchPixiv(string? message)
+        private static Match? MatchPixiv(string? message)
         {
             if (message == null)
                 return null;
             Match match = Regex.Match(message, @"^.*?(?:https?):\/\/(?:www\.)?(pixiv)(?:\.net\/)(?:[\w|\/|\.|\?|\&|\=]*?)*(\d+).*$", RegexOptions.IgnoreCase);
             return match.Success ? match : null;
         }
-        private Match? MatchArtstation(string? message)
+        private static Match? MatchArtstation(string? message)
         {
             if (message == null)
                 return null;
