@@ -206,6 +206,18 @@ VALUES
 
 GO
 
+INSERT INTO
+	draw_a_box_warmups (warmup, lesson)
+VALUES
+	('Organic Arrows', 2),
+	('Organic Forms with Contour Lines', 2),
+	('Texture Analysis', 2),
+	('Dissections',2),
+	('Form Intersections', 2),
+	('Organic Intersections', 2)
+
+GO
+
 CREATE TABLE
 	draw_a_box_box_challenge(
 		user_id VARCHAR(20) PRIMARY KEY,
