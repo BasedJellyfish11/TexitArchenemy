@@ -87,9 +87,9 @@ namespace TexitArchenemy.Services.Discord
 
                 if (Regex.IsMatch(message, @"^(?:\S*\s+)*dn(?:\S+\w*)*$"))
                 {
-                    int a = random.Next(50);
-                    await ArchenemyLogger.Log($"Message contained dn! Rolled a {a} as random chance number", "Discord");
-                    if (random.Next(50) == 25)
+                    int randomNumber = random.Next(50, 100);
+                    await ArchenemyLogger.Log($"Message contained dn! Rolled a {randomNumber} as random chance number", "Discord");
+                    if (randomNumber == 56)
                     {
                         string acronym = await GetDnAcronym();
                         await context.Channel.SendMessageAsync($"Does dn stand for {acronym} or");
@@ -99,7 +99,7 @@ namespace TexitArchenemy.Services.Discord
                 }
             }
 
-            else if (await SQLInteracter.IsRepostChannel(context.Channel.Id))
+            if (await SQLInteracter.IsRepostChannel(context.Channel.Id))
                 await EnsureNotRepost(message, context);
             
         }
