@@ -288,6 +288,7 @@ namespace TexitArchenemy.Services.Database
             SqlCommand sqlComm = new(procedure_name, conn) {CommandType = CommandType.StoredProcedure};
             if (parameters != null)
                 sqlComm.Parameters.AddRange(parameters);
+            sqlComm.CommandTimeout = 60;
             
             SqlDataReader reader = await sqlComm.ExecuteReaderAsync();
             return reader;
@@ -301,6 +302,7 @@ namespace TexitArchenemy.Services.Database
             SqlCommand sqlComm = new(procedure_name, conn) {CommandType = CommandType.StoredProcedure};
             if (parameters != null)
                 sqlComm.Parameters.AddRange(parameters);
+            sqlComm.CommandTimeout = 60;
             SqlParameter? returnValueIndex = sqlComm.Parameters.Add("@RETURN_VALUE", SqlDbType.Int);
             returnValueIndex.Direction = ParameterDirection.ReturnValue;
             
