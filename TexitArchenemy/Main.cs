@@ -27,9 +27,15 @@ namespace TexitArchenemy
             _streamReconnectionWaitTime = 0;
             while (true)
             {
-                await _twitter.StartStream(PostTweet, _streamReconnectionWaitTime);
-                await _twitter.Disconnect();
-                _streamReconnectionWaitTime = _streamReconnectionWaitTime == 0? _streamReconnectionWaitTime + 60:  _streamReconnectionWaitTime *2;
+                try 
+                { 
+                    await _twitter.StartStream(PostTweet, _streamReconnectionWaitTime);
+                }
+                catch (Exception e)
+                {
+                    await _twitter.Disconnect();
+                    _streamReconnectionWaitTime = _streamReconnectionWaitTime == 0? _streamReconnectionWaitTime + 60:  _streamReconnectionWaitTime *2;
+                }
             }
             
             await End();
@@ -54,7 +60,7 @@ namespace TexitArchenemy
                 channelsToSend.UnionWith(await SQLInteracter.GetTwitterRuleChannels(int.Parse(rule.Tag)));
             }
 
-            string tweetID = tweet.ReferencedTweets[0]?.Type == "retweeted" ? tweet.ReferencedTweets[0].Id : tweet.Id;
+            string tweetID = tweet.ReferencedTweets?[0]?.Type == "retweeted" ? tweet.ReferencedTweets[0].Id : tweet.Id;
             
             foreach (ulong channelID in channelsToSend)
             {
