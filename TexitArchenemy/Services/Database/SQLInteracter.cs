@@ -65,10 +65,10 @@ namespace TexitArchenemy.Services.Database
             SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.add_twitter_rule,connection, parameters);
             
             reader.Read();
-            if ((int) reader[TwitterRulesColumns.tag] != 1)
+            if ((int) reader[TwitterRulesColumns.tag] == -1)
                 return null;
-            
-            await (OnAddTwitterRule?.Invoke( new TwitterRule {tag = (int) reader[TwitterRulesColumns.tag], value = rule_value}) ?? Task.CompletedTask);
+            if((bool) reader["actually_added"])
+                await (OnAddTwitterRule?.Invoke( new TwitterRule {tag = (int) reader[TwitterRulesColumns.tag], value = rule_value}) ?? Task.CompletedTask);
 
             return new TwitterRule {tag = (int) reader[TwitterRulesColumns.tag], value = rule_value};
 

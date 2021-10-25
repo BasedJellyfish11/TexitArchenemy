@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Reflection;
@@ -89,7 +90,7 @@ namespace TexitArchenemy.Services.Discord
                 {
                     int randomNumber = random.Next(50, 100);
                     await ArchenemyLogger.Log($"Message contained dn! Rolled a {randomNumber} as random chance number", "Discord");
-                    if (randomNumber == 56)
+                    if (randomNumber == 56 || context.User.Id is 140169451994611712 or 746754218022666340)
                     {
                         string acronym = await GetDnAcronym();
                         await context.Channel.SendMessageAsync($"Does dn stand for {acronym} or");
