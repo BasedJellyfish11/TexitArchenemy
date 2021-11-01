@@ -14,7 +14,7 @@ namespace TexitArchenemy
     {
         private static DiscordBotMain? _botMain;
         private static TwitterConnection? _twitter;
-        private static int _streamReconnectionWaitTime;
+        private static int _retryBackoffDelay;
         private static async Task Main()
         {
             _botMain = new DiscordBotMain();
@@ -24,17 +24,17 @@ namespace TexitArchenemy
             AppDomain.CurrentDomain.ProcessExit += End;
             
             await _botMain.Connect(await SQLInteracter.GetDiscordToken());
-            _streamReconnectionWaitTime = 0;
+            _retryBackoffDelay = 0;
             while (true)
             {
                 try 
                 { 
-                    await _twitter.StartStream(PostTweet, _streamReconnectionWaitTime);
+                    await _twitter.StartStream(PostTweet, _retryBackoffDelay);
                 }
                 catch (Exception e)
                 {
                     await _twitter.Disconnect();
-                    _streamReconnectionWaitTime = _streamReconnectionWaitTime == 0? _streamReconnectionWaitTime + 60:  _streamReconnectionWaitTime *2;
+                    _retryBackoffDelay = _retryBackoffDelay == 0? _retryBackoffDelay + 60:  _retryBackoffDelay *2;
                 }
             }
             
@@ -53,7 +53,7 @@ namespace TexitArchenemy
                 return;
             }
 
-            _streamReconnectionWaitTime = 0;
+            _retryBackoffDelay = 0;
             HashSet<ulong> channelsToSend = new();
             foreach (FilteredStreamMatchingRuleV2? rule in args.MatchingRules)
             {
@@ -64,8 +64,25 @@ namespace TexitArchenemy
             
             foreach (ulong channelID in channelsToSend)
             {
-                if (!(await SQLInteracter.IsRepostChannel(channelID) && (!await SQLInteracter.PreemptiveRepostCheck(channelID, tweetID, LinkTypes.Twitter))))
-                    await _botMain!.SendMessage($"https://twitter.com/twitter/status/{tweetID}", channelID);
+                if (await SQLInteracter.IsRepostChannel(channelID) && !await SQLInteracter.PreemptiveRepostCheck(channelID, tweetID, LinkTypes.Twitter)) 
+                    continue;
+                
+                bool sent = false;
+                while(!sent)
+                    try
+                    {
+                        await _botMain!.SendMessage($"https://twitter.com/twitter/status/{tweetID}", channelID);
+                        sent = true;
+                    }
+                    catch (Discord.Net.HttpException)
+                    {
+                        sent = false;
+                        await Task.Delay
+                        (
+                            _retryBackoffDelay =
+                                _retryBackoffDelay == 0 ? _retryBackoffDelay + 60 : _retryBackoffDelay * 2
+                        );
+                    }
             }
             
         }
