@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Reflection;
@@ -8,6 +7,7 @@ using System.Threading.Tasks;
 using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
+using JetBrains.Annotations;
 using TexitArchenemy.Services.Database;
 using TexitArchenemy.Services.Logger;
 
@@ -72,6 +72,7 @@ namespace TexitArchenemy.Services.Discord
         {
             await ArchenemyLogger.Log($"Handling message {context.Message} from channel {context.Channel}", "Discord");
             string? message = context.Message.Content?.ToLower();
+            Console.WriteLine("kljshf");
             if(message == null)
                 return;
             if (context.Message.Author.Id != _client.CurrentUser.Id)
@@ -86,7 +87,7 @@ namespace TexitArchenemy.Services.Discord
                     );
                 }
 
-                if (Regex.IsMatch(message, @"^(?:\S*\s+)*dn(?:\S+\w*)*$"))
+                if (await MatchesRegex(message, @"(?:\S*\s+)*dn(?:\s+\S*)*$") != null)
                 {
                     int randomNumber = random.Next(50, 100);
                     await ArchenemyLogger.Log($"Message contained dn! Rolled a {randomNumber} as random chance number", "Discord");
@@ -119,7 +120,7 @@ namespace TexitArchenemy.Services.Discord
         private static async Task EnsureNotRepost(string? message, SocketCommandContext context)
         {
             await ArchenemyLogger.Log("A message was posted in a no repost channel! Checking...", "Discord");
-            Match? match = AttemptMatchArtLink(message);
+            Match? match = await AttemptMatchArtLink(message);
             if (match == null)
             {
                 await ArchenemyLogger.Log("The message wasn't an art link", "Discord");
@@ -148,32 +149,40 @@ namespace TexitArchenemy.Services.Discord
         }
 
         
-        private static Match? AttemptMatchArtLink(string? message)
+        private static async Task<Match?> AttemptMatchArtLink(string? message)
         {
-            return MatchTwitter(message) ?? (MatchPixiv(message) ?? MatchArtstation(message));
+            return await MatchTwitter(message) ?? (await MatchPixiv(message) ?? await MatchArtstation(message));
             
         }
 
-        private static Match? MatchTwitter(string? message)
+        private static async Task<Match?> MatchTwitter(string? message)
         {
-            if (message == null)
-                return null;
-            Match match = Regex.Match(message, @"^.*?(?:https?):\/\/(?:www\.|mobile\.|m\.)?(?:fx)?(twitter)(?:\.com\/)(?:[\w]*?\/)?(?:status|statuses)\/(\d+).*$", RegexOptions.IgnoreCase);
-            return match.Success ? match : null;
+            return await MatchesRegex(message, @"^.*?(?:https?):\/\/(?:www\.|mobile\.|m\.)?(?:fx)?(twitter)(?:\.com\/)(?:[\w]*?\/)?(?:status|statuses)\/(\d+).*$");
         }
-        private static Match? MatchPixiv(string? message)
+        private static async Task<Match?> MatchPixiv(string? message)
         {
-            if (message == null)
-                return null;
-            Match match = Regex.Match(message, @"^.*?(?:https?):\/\/(?:www\.)?(pixiv)(?:\.net\/)(?:[\w|\/|\.|\?|\&|\=]*?)*(\d+).*$", RegexOptions.IgnoreCase);
-            return match.Success ? match : null;
+            return await MatchesRegex(message, @"^.*?(?:https?):\/\/(?:www\.)?(pixiv)(?:\.net\/)(?:[\w|\/|\.|\?|\&|\=]*?)*(\d+).*$");
         }
-        private static Match? MatchArtstation(string? message)
+        private static async Task<Match?> MatchArtstation(string? message)
+        {
+            return await MatchesRegex(message, @"^.*?(?:https?):\/\/(?:.*\.)?(artstation)(?:\.com\/)(?:artwork|projects?)*\/([^?\n]+)(?:\?)?.*\n*$");
+        }
+
+        private static async Task<Match?> MatchesRegex(string? message, [RegexPattern] string pattern)
         {
             if (message == null)
                 return null;
-            Match match = Regex.Match(message, @"^.*?(?:https?):\/\/(?:.*\.)?(artstation)(?:\.com\/)(?:artwork|projects?)*\/([^?\n]+)(?:\?)?.*\n*$", RegexOptions.IgnoreCase);
-            return match.Success ? match : null;
+            
+            try
+            {
+                Match match = Regex.Match(message, pattern, RegexOptions.IgnoreCase, TimeSpan.FromSeconds(2));
+                return match.Success? match:null;
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                await ArchenemyLogger.Log($"The message {message} timed out on the Regex Match of the pattern {pattern}", "Discord");
+                return null;
+            }
         }
     }
 }
