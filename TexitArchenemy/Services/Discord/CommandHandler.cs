@@ -15,6 +15,22 @@ namespace TexitArchenemy.Services.Discord
 {
     public class CommandHandler
     {
+        // language=regexp
+        private const string TWITTER_REGEX = 
+            @"(?:^|\s)(?:https?):\/\/(?:www\.|mobile\.|m\.)?(?:fx)?(twitter)(?:\.com\/)(?:[\w]*?\/)?(?:status|statuses)\/(\d{18,20})(?:\s|$)";
+        
+        // language=regexp
+        private const string PIXIV_REGEX = 
+            @"(?:^|\s)(?:https?):\/\/(?:www\.)?(pixiv)(?:\.net\/)(?:[\w|\/|\.|\?|\&|\=]*?)(?:(?:artworks\/|illust_id=)(\d{6,9}))(?:\s|$|&)";
+        
+        // language=regexp*
+        private const string ARTSTATION_REGEX = 
+            @"(?:^|\s)(?:https?):\/\/(?:[\w-]+\.)?(artstation)(?:\.com\/)(?:artwork|projects?)*\/([^?&\s]+)(?:\s|$|&|\?)";
+        
+        // language=regexp
+        private const string DN_REGEX = 
+            @"(?:^|\s)dn(?:\s|$)";
+        
         private readonly DiscordSocketClient _client;
         private readonly CommandService _commands;
         private readonly Random random = new();
@@ -87,7 +103,7 @@ namespace TexitArchenemy.Services.Discord
                     );
                 }
 
-                if (await MatchesRegex(message, @"(?:\S*\s+)*dn(?:\s+\S*)*$") != null)
+                if (await MatchesRegex(message, DN_REGEX) != null)
                 {
                     int randomNumber = random.Next(50, 100);
                     await ArchenemyLogger.Log($"Message contained dn! Rolled a {randomNumber} as random chance number", "Discord");
@@ -157,15 +173,15 @@ namespace TexitArchenemy.Services.Discord
 
         private static async Task<Match?> MatchTwitter(string? message)
         {
-            return await MatchesRegex(message, @"^.*?(?:https?):\/\/(?:www\.|mobile\.|m\.)?(?:fx)?(twitter)(?:\.com\/)(?:[\w]*?\/)?(?:status|statuses)\/(\d+).*$");
+            return await MatchesRegex(message, TWITTER_REGEX);
         }
         private static async Task<Match?> MatchPixiv(string? message)
         {
-            return await MatchesRegex(message, @"^.*?(?:https?):\/\/(?:www\.)?(pixiv)(?:\.net\/)(?:[\w|\/|\.|\?|\&|\=]*?)*(\d+).*$");
+            return await MatchesRegex(message, PIXIV_REGEX);
         }
         private static async Task<Match?> MatchArtstation(string? message)
         {
-            return await MatchesRegex(message, @"^.*?(?:https?):\/\/(?:.*\.)?(artstation)(?:\.com\/)(?:artwork|projects?)*\/([^?\n]+)(?:\?)?.*\n*$");
+            return await MatchesRegex(message, ARTSTATION_REGEX);
         }
 
         private static async Task<Match?> MatchesRegex(string? message, [RegexPattern] string pattern)
