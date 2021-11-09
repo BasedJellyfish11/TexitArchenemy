@@ -88,7 +88,6 @@ namespace TexitArchenemy.Services.Discord
         {
             await ArchenemyLogger.Log($"Handling message {context.Message} from channel {context.Channel}", "Discord");
             string? message = context.Message.Content?.ToLower();
-            Console.WriteLine("kljshf");
             if(message == null)
                 return;
             if (context.Message.Author.Id != _client.CurrentUser.Id)

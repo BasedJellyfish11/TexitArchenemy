@@ -31,14 +31,13 @@ namespace TexitArchenemy
                 { 
                     await _twitter.StartStream(PostTweet, _retryBackoffDelay);
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                     await _twitter.Disconnect();
                     _retryBackoffDelay = _retryBackoffDelay == 0? _retryBackoffDelay + 60:  _retryBackoffDelay *2;
                 }
             }
             
-            await End();
             
         }
         
