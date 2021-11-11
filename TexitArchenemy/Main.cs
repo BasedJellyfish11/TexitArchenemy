@@ -29,7 +29,7 @@ namespace TexitArchenemy
             {
                 try 
                 { 
-                    await _twitter.StartStream(PostTweet, _retryBackoffDelay);
+                    await _twitter.StartStream(PostTweet, _retryBackoffDelay); // This will block
                 }
                 catch (Exception)
                 {

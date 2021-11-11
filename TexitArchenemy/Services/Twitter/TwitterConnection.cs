@@ -52,7 +52,8 @@ namespace TexitArchenemy.Services.Twitter
             }
             catch (IOException e)
             {
-                await ArchenemyLogger.Log($"Stream was disconnected! Exception was {e} Waiting...", "Twitter");
+                await ArchenemyLogger.Log($"Stream was disconnected! Exception was {e}", "Twitter");
+                await Disconnect();
             } 
 
         }
