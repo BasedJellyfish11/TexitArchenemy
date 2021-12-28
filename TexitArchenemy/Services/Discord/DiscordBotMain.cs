@@ -16,7 +16,12 @@ namespace TexitArchenemy.Services.Discord
         
         public DiscordBotMain()
         {
-            _client = new DiscordSocketClient();
+            DiscordSocketConfig config = new()
+            {
+                GatewayIntents =
+                    GatewayIntents.DirectMessages | GatewayIntents.GuildMessages | GatewayIntents.Guilds
+            };
+            _client = new DiscordSocketClient(config);
             _client.Log += ArchenemyLogger.Log;
             
             CommandService commandService = new(new CommandServiceConfig(){CaseSensitiveCommands = false, SeparatorChar = ';'});
