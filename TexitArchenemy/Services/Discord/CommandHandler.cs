@@ -17,7 +17,7 @@ namespace TexitArchenemy.Services.Discord
     {
         // language=regexp
         private const string TWITTER_REGEX = 
-            @"(?:^|\s)(?:https?):\/\/(?:www\.|mobile\.|m\.)?(?:fx)?(twitter)(?:\.com\/)(?:[\w\-\?\*]*?\/)?(?:status|statuses)\/(\d{18,20})(?:\s|$)";
+            @"(?:^|\s)(?:https?):\/\/(?:www\.|mobile\.|m\.)?(?:fx)?(twitter)(?:\.com\/)(?:[\w\-\*]*?\/)?(?:status|statuses)\/(\d{18,20})(?:\s|$|\?|\/)";
         
         // language=regexp
         private const string PIXIV_REGEX = 
@@ -86,7 +86,7 @@ namespace TexitArchenemy.Services.Discord
 
         private async Task CheckNonCommand(SocketCommandContext context)
         {
-            await ArchenemyLogger.Log($"Handling message {context.Message} from channel {context.Channel}", "Discord");
+            // await ArchenemyLogger.Log($"Handling message {context.Message} from channel {context.Channel}", "Discord");
             string? message = context.Message.Content?.ToLower();
             if(message == null)
                 return;
@@ -104,7 +104,7 @@ namespace TexitArchenemy.Services.Discord
 
                 if (await MatchesRegex(message, DN_REGEX) != null)
                 {
-                    int randomNumber = random.Next(50, 100);
+                    int randomNumber = random.Next(50, 60);
                     await ArchenemyLogger.Log($"Message contained dn! Rolled a {randomNumber} as random chance number", "Discord");
                     if (randomNumber == 56 || context.User.Id is 140169451994611712 or 746754218022666340)
                     {

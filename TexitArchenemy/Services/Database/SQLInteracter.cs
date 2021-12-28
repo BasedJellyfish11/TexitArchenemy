@@ -14,6 +14,7 @@ namespace TexitArchenemy.Services.Database
     public static class SQLInteracter
     {
         private const string CONNECTION_STRING = @"Data Source=.\SQLEXPRESS;Database=TEXIT_ARCHENEMY;Integrated Security=True;";
+        private const int SQL_EXCEPTION = -999;
 
         public delegate Task OnAddTwitterRuleHandler(TwitterRule addedRule);
         public static OnAddTwitterRuleHandler? OnAddTwitterRule;
@@ -22,7 +23,8 @@ namespace TexitArchenemy.Services.Database
         public static async Task<string> GetDiscordToken()
         {
             await using SqlConnection connection = new(CONNECTION_STRING);
-            await using SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_discord_creds, connection);
+            await using SqlDataReader? reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_discord_creds, connection);
+            
             if(!reader.HasRows)
                 throw new InvalidOperationException(NoRowsError(ProcedureNames.get_discord_creds));
 
@@ -33,7 +35,7 @@ namespace TexitArchenemy.Services.Database
         public static async Task<TwitterAuth> GetTwitterToken()
         {
             await using SqlConnection connection = new(CONNECTION_STRING);
-            await using SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_twitter_creds, connection);
+            await using SqlDataReader? reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_twitter_creds, connection);
             
             if(!reader.HasRows)
                 throw new InvalidOperationException(NoRowsError(ProcedureNames.get_twitter_creds));
@@ -62,7 +64,7 @@ namespace TexitArchenemy.Services.Database
             parameters[1].Value = channel.Guild.ToString();
             parameters[2].Value = rule_value;
 
-            SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.add_twitter_rule,connection, parameters);
+            SqlDataReader? reader = await ExecuteReturnQueryProcedure(ProcedureNames.add_twitter_rule,connection, parameters);
             
             reader.Read();
             if ((int) reader[TwitterRulesColumns.tag] == -1)
@@ -90,7 +92,7 @@ namespace TexitArchenemy.Services.Database
             parameters[2].Value = linkId;
             parameters[3].Value = linkType.ToString();
             
-            await using SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.check_repost, connection, parameters);
+            await using SqlDataReader? reader = await ExecuteReturnQueryProcedure(ProcedureNames.check_repost, connection, parameters);
             
             if(!reader.HasRows)
                 throw new InvalidOperationException(NoRowsError(ProcedureNames.check_repost));
@@ -119,7 +121,7 @@ namespace TexitArchenemy.Services.Database
             parameters[1].Value = linkId;
             parameters[2].Value = linkType.ToString();
             
-            await using SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.preemptive_repost_check, connection, parameters);
+            await using SqlDataReader? reader = await ExecuteReturnQueryProcedure(ProcedureNames.preemptive_repost_check, connection, parameters);
             
             if(!reader.HasRows)
                 throw new InvalidOperationException(NoRowsError(ProcedureNames.check_repost));
@@ -155,7 +157,7 @@ namespace TexitArchenemy.Services.Database
 
             };
             parameters[0].Value = tag;
-            await using SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_twitter_rule_channels, connection, parameters);
+            await using SqlDataReader? reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_twitter_rule_channels, connection, parameters);
             
             if(!reader.HasRows)
                 throw new InvalidOperationException(NoRowsError(ProcedureNames.get_twitter_rule_channels));
@@ -172,7 +174,7 @@ namespace TexitArchenemy.Services.Database
         public static async Task<HashSet<TwitterRule>> GetTwitterRules()
         {
             await using SqlConnection connection = new(CONNECTION_STRING);
-            await using SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_twitter_rules, connection);
+            await using SqlDataReader? reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_twitter_rules, connection);
             if(!reader.HasRows)
                 throw new InvalidOperationException(NoRowsError(ProcedureNames.get_twitter_rules));
 
@@ -200,7 +202,7 @@ namespace TexitArchenemy.Services.Database
             };
             parameters[0].Value = level;
 
-            SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_box_warmup,connection, parameters);
+            SqlDataReader? reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_box_warmup,connection, parameters);
 
             List<string?> warmups = new();
             while (reader.Read())
@@ -224,7 +226,7 @@ namespace TexitArchenemy.Services.Database
             parameters[0].Value = user.Id.ToString();
             parameters[1].Value = boxesDrawn;
 
-            SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.update_box_challenge_progress,connection, parameters);
+            SqlDataReader? reader = await ExecuteReturnQueryProcedure(ProcedureNames.update_box_challenge_progress,connection, parameters);
 
             reader.Read();
             
@@ -242,7 +244,7 @@ namespace TexitArchenemy.Services.Database
             };
             parameters[0].Value = user.Id.ToString();
 
-            SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_box_challenge_progress,connection, parameters);
+            SqlDataReader? reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_box_challenge_progress,connection, parameters);
 
             reader.Read();
             
@@ -260,7 +262,7 @@ namespace TexitArchenemy.Services.Database
             };
             parameters[0].Value = channelID.ToString();
 
-            SqlDataReader reader = await ExecuteReturnQueryProcedure(ProcedureNames.is_repost_channel,connection, parameters);
+            SqlDataReader? reader = await ExecuteReturnQueryProcedure(ProcedureNames.is_repost_channel,connection, parameters);
 
             reader.Read();
             
@@ -288,10 +290,11 @@ namespace TexitArchenemy.Services.Database
             SqlCommand sqlComm = new(procedure_name, conn) {CommandType = CommandType.StoredProcedure};
             if (parameters != null)
                 sqlComm.Parameters.AddRange(parameters);
-            sqlComm.CommandTimeout = 60;
+            sqlComm.CommandTimeout = 300;
             
             SqlDataReader reader = await sqlComm.ExecuteReaderAsync();
             return reader;
+           
         }
 
 
@@ -302,11 +305,19 @@ namespace TexitArchenemy.Services.Database
             SqlCommand sqlComm = new(procedure_name, conn) {CommandType = CommandType.StoredProcedure};
             if (parameters != null)
                 sqlComm.Parameters.AddRange(parameters);
-            sqlComm.CommandTimeout = 60;
+            sqlComm.CommandTimeout = 300;
             SqlParameter? returnValueIndex = sqlComm.Parameters.Add("@RETURN_VALUE", SqlDbType.Int);
             returnValueIndex.Direction = ParameterDirection.ReturnValue;
-            
-            await sqlComm.ExecuteNonQueryAsync();
+
+            try
+            {
+                await sqlComm.ExecuteNonQueryAsync();
+            }
+            catch (SqlException)
+            {
+                return -999;
+            }
+
             return (int) returnValueIndex.Value;
         }
 

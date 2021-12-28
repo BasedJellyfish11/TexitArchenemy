@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Threading.Tasks;
+using Discord.Net;
 using TexitArchenemy.Services.Database;
 using TexitArchenemy.Services.Discord;
 using TexitArchenemy.Services.Logger;
@@ -73,7 +75,7 @@ namespace TexitArchenemy
                         await _botMain!.SendMessage($"https://twitter.com/twitter/status/{tweetID}", channelID);
                         sent = true;
                     }
-                    catch (Discord.Net.HttpException)
+                    catch (Exception exception ) when (exception is HttpRequestException or HttpException)
                     {
                         sent = false;
                         await Task.Delay
@@ -81,7 +83,8 @@ namespace TexitArchenemy
                             _retryBackoffDelay =
                                 _retryBackoffDelay == 0 ? _retryBackoffDelay + 60 : _retryBackoffDelay * 2
                         );
-                    }
+                    }                    
+
             }
             
         }
