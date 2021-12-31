@@ -1,9 +1,8 @@
-﻿namespace TexitArchenemy.Services.Twitter
+﻿namespace TexitArchenemy.Services.Twitter;
+
+public enum RetweetsMode
 {
-    public enum RetweetsMode
-    {
-        RetweetsOff,
-        RetweetsOn,
-        OnlyRetweets
-    }
+    RetweetsOff,
+    RetweetsOn,
+    OnlyRetweets
 }

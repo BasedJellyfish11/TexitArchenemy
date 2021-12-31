@@ -1,9 +1,7 @@
-﻿namespace TexitArchenemy.Services.Twitter
+﻿namespace TexitArchenemy.Services.Twitter;
+
+public struct TwitterRule
 {
-    public struct TwitterRule
-    {
-        public string value;
-        public int tag;
-    }
-    
+    public string value;
+    public int tag;
 }
