@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Discord;
 using Discord.Commands;
+using JetBrains.Annotations;
 
 namespace TexitArchenemy.Services.Discord.Commands
 {
@@ -13,6 +14,7 @@ namespace TexitArchenemy.Services.Discord.Commands
 
         [Command("Help")]
         [Summary("Displays all commands")]
+        [UsedImplicitly]
         public async Task Help()
         {
             List<CommandInfo> commands = _commandService.Commands.ToList();

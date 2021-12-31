@@ -18,8 +18,7 @@ namespace TexitArchenemy.Services.Discord
         {
             DiscordSocketConfig config = new()
             {
-                GatewayIntents =
-                    GatewayIntents.DirectMessages | GatewayIntents.GuildMessages | GatewayIntents.Guilds
+                GatewayIntents = GatewayIntents.DirectMessages | GatewayIntents.GuildMessages | GatewayIntents.Guilds,
             };
             _client = new DiscordSocketClient(config);
             _client.Log += ArchenemyLogger.Log;
@@ -61,8 +60,8 @@ namespace TexitArchenemy.Services.Discord
         
         private Task semaphoreShit()
         {
-            _waitReadySemaphore.Release();
             _client.Ready -= semaphoreShit;
+            _waitReadySemaphore.Release();
             return Task.CompletedTask;
         }
 

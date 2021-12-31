@@ -15,7 +15,6 @@ using TexitArchenemy.Services.Logger;
 
 namespace TexitArchenemy.Services.Discord.Commands
 {
-    [UsedImplicitly]
     public class Skeleton: ModuleBase<SocketCommandContext>
     {
         private static readonly Random random = new ();
@@ -25,6 +24,7 @@ namespace TexitArchenemy.Services.Discord.Commands
         
         [Command("Skeleton")]
         [Summary("These are cool")]
+        [UsedImplicitly]
         public async Task skeletonCommand([Summary("The upper text")]string upperText, [Summary("The lower text")] string lowerText = "")
         {
             upperText = upperText.ToUpper();

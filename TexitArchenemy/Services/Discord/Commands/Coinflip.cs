@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Discord.Commands;
+using JetBrains.Annotations;
 using TexitArchenemy.Services.Logger;
 
 namespace TexitArchenemy.Services.Discord.Commands
@@ -9,6 +10,7 @@ namespace TexitArchenemy.Services.Discord.Commands
     {
         [Command("Coinflip")]
         [Summary("Flips a coin")]
+        [UsedImplicitly]
         public async Task Coinflip()
         {
             int rng = new Random().Next(0, 2);

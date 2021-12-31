@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
+using JetBrains.Annotations;
 using TexitArchenemy.Services.Database;
 using TexitArchenemy.Services.Logger;
 
@@ -12,6 +13,7 @@ namespace TexitArchenemy.Services.Discord.Commands
     {
         [Command("BoxChallengeProgress")]
         [Summary("Adds the given number to the user's current Draw A Box 250 box challenge progress. If no parameters are given, it displays the current progress")]
+        [UsedImplicitly]
         public async Task UpdateBoxChallengeProgress(int drawnBoxes = 0)
         {
             int progress;
