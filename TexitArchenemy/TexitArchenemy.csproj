@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFramework>net6.0</TargetFramework>
+        <TargetFramework>net5.0</TargetFramework>
         <Nullable>enable</Nullable>
         <LangVersion>10</LangVersion>
     </PropertyGroup>
@@ -19,7 +19,7 @@
         <CreateItem Include="$(SolutionDir)Skeletons\*.*">
             <Output TaskParameter="Include" ItemName="SourceFiles" />
         </CreateItem>
-        <Copy SourceFiles="@(SourceFiles)" DestinationFolder="$(TargetDir)/Skeletons"/>
+        <Copy SourceFiles="@(SourceFiles)" DestinationFolder="$(TargetDir)/Skeletons" />
         <Exec Command="@echo on" />
         <Exec Command="echo Copying skeletons folder" />
     </Target>
