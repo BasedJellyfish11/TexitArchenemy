@@ -12,6 +12,7 @@ namespace TexitArchenemy.Services.Logger
         public static async Task Log(string message, string from, bool addDatetime = true)
         {
             await _semaphoreSlim.WaitAsync();
+            Directory.CreateDirectory("Logger");
             Task fileWrite = File.AppendAllTextAsync(@"Logger\log.txt", $"{(addDatetime?" "+ DateTime.Now.TimeOfDay.ToString("hh\\:mm\\:ss")  + " " :string.Empty)}{from} {message} {Environment.NewLine}");
             Console.WriteLine($"{(addDatetime?" " +DateTime.Now.TimeOfDay.ToString("hh\\:mm\\:ss") + " " :string.Empty)}{from}\t{message}");
             await fileWrite;
