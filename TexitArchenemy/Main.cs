@@ -22,15 +22,20 @@ public static class TexitArchenemy
     {
         _botMain = new DiscordBotMain();
         _twitter = new TwitterConnection(await SQLInteracter.GetTwitterToken());
-        foreach (TwitterRule rule in await SQLInteracter.GetTwitterRules())
-        {
-            _cachedRuleChannelRelation.Add(rule.tag, await SQLInteracter.GetTwitterRuleChannels(rule.tag));
-        }
+
             
         Console.CancelKeyPress += End;
         AppDomain.CurrentDomain.ProcessExit += End;
             
-        await _botMain.Connect(await SQLInteracter.GetDiscordToken());
+        Task discordConnectTask = _botMain.Connect(await SQLInteracter.GetDiscordToken());
+        
+        foreach (TwitterRule rule in await SQLInteracter.GetTwitterRules())
+        {
+            _cachedRuleChannelRelation.Add(rule.tag, await SQLInteracter.GetTwitterRuleChannels(rule.tag));
+        }
+
+        await discordConnectTask;
+        
         _retryBackoffDelay = 0;
         while (true)
         {
