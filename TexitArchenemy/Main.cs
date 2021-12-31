@@ -17,10 +17,15 @@ namespace TexitArchenemy
         private static DiscordBotMain? _botMain;
         private static TwitterConnection? _twitter;
         private static int _retryBackoffDelay;
+        private static readonly Dictionary<int, HashSet<ulong>> _cachedRuleChannelRelation = new();
         private static async Task Main()
         {
             _botMain = new DiscordBotMain();
             _twitter = new TwitterConnection(await SQLInteracter.GetTwitterToken());
+            foreach (TwitterRule rule in await SQLInteracter.GetTwitterRules())
+            {
+                _cachedRuleChannelRelation.Add(rule.tag, await SQLInteracter.GetTwitterRuleChannels(rule.tag));
+            }
             
             Console.CancelKeyPress += End;
             AppDomain.CurrentDomain.ProcessExit += End;
@@ -41,6 +46,7 @@ namespace TexitArchenemy
             }
             
             
+            // ReSharper disable once FunctionNeverReturns
         }
         
 
@@ -58,7 +64,7 @@ namespace TexitArchenemy
             HashSet<ulong> channelsToSend = new();
             foreach (FilteredStreamMatchingRuleV2? rule in args.MatchingRules)
             {
-                channelsToSend.UnionWith(await SQLInteracter.GetTwitterRuleChannels(int.Parse(rule.Tag)));
+                channelsToSend.UnionWith(_cachedRuleChannelRelation[int.Parse(rule.Tag)]);
             }
 
             string tweetID = tweet.ReferencedTweets?[0]?.Type == "retweeted" ? tweet.ReferencedTweets[0].Id : tweet.Id;
@@ -69,13 +75,14 @@ namespace TexitArchenemy
                     continue;
                 
                 bool sent = false;
-                while(!sent)
+                while (!sent)
+                {
                     try
                     {
                         await _botMain!.SendMessage($"https://twitter.com/twitter/status/{tweetID}", channelID);
                         sent = true;
                     }
-                    catch (Exception exception ) when (exception is HttpRequestException or HttpException)
+                    catch (Exception exception) when (exception is HttpRequestException or HttpException)
                     {
                         sent = false;
                         await Task.Delay
@@ -83,7 +90,8 @@ namespace TexitArchenemy
                             _retryBackoffDelay =
                                 _retryBackoffDelay == 0 ? _retryBackoffDelay + 60 : _retryBackoffDelay * 2
                         );
-                    }                    
+                    }
+                }
 
             }
             
