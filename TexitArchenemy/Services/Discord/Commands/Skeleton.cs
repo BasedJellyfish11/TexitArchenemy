@@ -17,10 +17,9 @@ namespace TexitArchenemy.Services.Discord.Commands;
 
 public class Skeleton: ModuleBase<SocketCommandContext>
 {
-    private static readonly Random random = new ();
+    private static readonly Random random = new();
     private const int BOTTOM_MARGIN = 10;
     private const int MIDDLE_MARGIN = 100 + BOTTOM_MARGIN;
-    private const int OUTLINE_WIDTH = 3;
         
     [Command("Skeleton")]
     [Summary("These are cool")]
@@ -47,15 +46,16 @@ public class Skeleton: ModuleBase<SocketCommandContext>
 
         // Make sure the text fits by reducing the font until it does
         Font font = new(SystemFonts.Find("Impact"), Math.Min(image.Width, image.Height) / 6f, FontStyle.Bold);
-        while (TextMeasurer.Measure(string.Concat(upperText, " ", lowerText), new RendererOptions(font) { WrappingWidth = image.Width }).Height + MIDDLE_MARGIN
-               > image.Height)
+        FontRectangle allTextRectangle;
+        while ((allTextRectangle = TextMeasurer.Measure(string.Concat(upperText, Environment.NewLine, lowerText), new RendererOptions(font) { WrappingWidth = image.Width })).Height + MIDDLE_MARGIN > image.Height
+               || allTextRectangle.Width > image.Width)
         {
             font = new Font(font, font.Size * 0.9f);
         }
 
         // Brush and outline
         SolidBrush? brush = Brushes.Solid(Color.White);
-        Pen? outlinePen = Pens.Solid(Color.Black, OUTLINE_WIDTH);
+        Pen? outlinePen = Pens.Solid(Color.Black, font.Size/20);
             
         // Draw upper text at 0,0
         image.Mutate
@@ -92,7 +92,10 @@ public class Skeleton: ModuleBase<SocketCommandContext>
         await Context.Channel.SendFileAsync(stream, "skeleton.png");
             
         await ArchenemyLogger.Log($"Executed command Skeleton for user {Context.User} in channel {Context.Channel} {Context.Channel.Id}", "Discord");
-            
+
+
     }
+    
+    
         
 }
