@@ -64,7 +64,7 @@ public static class TexitArchenemy
             await (_twitter?.Disconnect() ?? Task.CompletedTask);
             return;
         }
-
+        
         _retryBackoffDelay = 0;
         HashSet<ulong> channelsToSend = new();
         foreach (FilteredStreamMatchingRuleV2? rule in args.MatchingRules)
@@ -73,6 +73,7 @@ public static class TexitArchenemy
         }
 
         string tweetID = tweet.ReferencedTweets?[0]?.Type == "retweeted" ? tweet.ReferencedTweets[0].Id : tweet.Id;
+        string tweetOriginalOwner = tweet.ReferencedTweets?[0]?.Type == "retweeted" ? args.Includes.Users[1].Username : args.Includes.Users[0].Username;
             
         foreach (ulong channelID in channelsToSend)
         {
@@ -84,16 +85,16 @@ public static class TexitArchenemy
             {
                 try
                 {
-                    await _botMain!.SendMessage($"https://twitter.com/twitter/status/{tweetID}", channelID);
+                    await _botMain!.SendMessage($"https://twitter.com/{tweetOriginalOwner}/status/{tweetID}", channelID);
                     sent = true;
                 }
-                catch (Exception exception) when (exception is HttpRequestException or HttpException)
+                catch (Exception exception) when (exception is HttpRequestException or HttpException or TimeoutException)
                 {
                     sent = false;
                     await Task.Delay
                     (
-                        _retryBackoffDelay =
-                            _retryBackoffDelay == 0 ? _retryBackoffDelay + 60 : _retryBackoffDelay * 2
+                        _retryBackoffDelay = Math.Min(5 * 1000 * 60, 
+                            _retryBackoffDelay == 0 ? _retryBackoffDelay + 60 : _retryBackoffDelay * 2)
                     );
                 }
             }
