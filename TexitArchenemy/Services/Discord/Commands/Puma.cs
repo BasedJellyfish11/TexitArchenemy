@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Discord.Commands;
 using JetBrains.Annotations;
-using TexitArchenemy.Services.Logger;
 
 namespace TexitArchenemy.Services.Discord.Commands;
 
@@ -16,11 +15,11 @@ public class PumaModule: ModuleBase<SocketCommandContext>
     [Command("Puma")]
     [Summary("RRRRRRRRRAAAAAAAAAAAGH")]
     [UsedImplicitly]
-    public async Task Coinflip()
+    public async Task Puma()
     {
         List<string> files = Directory.EnumerateFiles("Venom/").ToList();
         
-        await Context.Channel.SendFileAsync(files[random.Next(0, files.Count)], "skeleton.png");
+        await Context.Channel.SendFileAsync(files[random.Next(0, files.Count)]);
             
     }
 }
