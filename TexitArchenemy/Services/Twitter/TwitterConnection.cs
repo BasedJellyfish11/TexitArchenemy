@@ -32,14 +32,20 @@ public class TwitterConnection
     {
         // Delete and readd rules
 
+        await ArchenemyLogger.Log("Getting current rules", "Twitter");
         FilteredStreamRuleV2[] currentRules =(await client.StreamsV2.GetRulesForFilteredStreamV2Async()).Rules;
+        await ArchenemyLogger.Log("Deleting current rules", "Twitter");
         if(currentRules.Length > 0)
             await client.StreamsV2.DeleteRulesFromFilteredStreamAsync(currentRules);
             
             
+        await ArchenemyLogger.Log("Adding new rules", "Twitter");
         await client.StreamsV2.AddRulesToFilteredStreamAsync((await DeserializeRules()).Select(x => new FilteredStreamRuleConfig(x.value, x.tag.ToString())).ToArray());
             
+        await ArchenemyLogger.Log("Creating filtered stream", "Twitter");
         stream = client.StreamsV2.CreateFilteredStream();
+        
+        await ArchenemyLogger.Log("Hooking TweetReceived", "Twitter");
         stream.TweetReceived += toHook;
 
         // Need to wait a bit after adding the rules - Twitter literally says "a minute" so let's take that at face value
