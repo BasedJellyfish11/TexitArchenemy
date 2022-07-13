@@ -30,8 +30,10 @@ public class Skeleton: ModuleBase<SocketCommandContext>
         lowerText = lowerText.ToUpper();
             
         // Discover all skeletons and choose one at random
-        IEnumerable<string> files = Directory.EnumerateFiles("Skeletons/").ToList();
-        string path = files.ElementAt(random.Next(0, files.Count()));
+        List<string> files = Directory.EnumerateFiles("Skeletons/").ToList();
+        files.AddRange(Directory.EnumerateFiles("Venom/"));
+        
+        string path = files[random.Next(0, files.Count)];
         Image image = await Image.LoadAsync(path);
             
         DrawingOptions options = new()
