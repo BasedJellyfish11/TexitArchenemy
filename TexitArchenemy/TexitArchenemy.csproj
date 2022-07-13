@@ -17,11 +17,14 @@
     
     <Target Name="PostBuild" AfterTargets="PostBuildEvent">
         <CreateItem Include="$(SolutionDir)Skeletons\*.*">
-            <Output TaskParameter="Include" ItemName="SourceFiles" />
+            <Output TaskParameter="Include" ItemName="SkeletonFiles" />
         </CreateItem>
-        <Copy SourceFiles="@(SourceFiles)" DestinationFolder="$(TargetDir)/Skeletons" />
+        <CreateItem Include="$(SolutionDir)Venom\*.*">
+            <Output TaskParameter="Include" ItemName="VenomFiles" />
+        </CreateItem>
+        <Copy SourceFiles="@(SkeletonFiles)" DestinationFolder="$(TargetDir)/Venom" />
         <Exec Command="@echo on" />
-        <Exec Command="echo Copying skeletons folder" />
+        <Exec Command="echo Copying venom folder" />
     </Target>
 
 </Project>
