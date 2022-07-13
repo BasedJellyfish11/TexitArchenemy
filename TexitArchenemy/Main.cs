@@ -43,8 +43,9 @@ public static class TexitArchenemy
             { 
                 await _twitter.StartStream(PostTweet, _retryBackoffDelay); // This will block
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                await ArchenemyLogger.Log(e.Message, "Twitter");
                 await _twitter.Disconnect();
                 _retryBackoffDelay = _retryBackoffDelay == 0? _retryBackoffDelay + 60:  _retryBackoffDelay *2;
             }
