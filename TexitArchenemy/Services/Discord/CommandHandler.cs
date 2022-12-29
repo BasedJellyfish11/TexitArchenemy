@@ -1,6 +1,6 @@
 ﻿using System;
 using System.IO;
-using System.Net;
+using System.Net.Http;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -157,8 +157,8 @@ public class CommandHandler
 
     private static async Task<string> WordWebRequest(string url)
     {
-        WebRequest request = WebRequest.Create(url);
-        await using Stream webStream = (await request.GetResponseAsync()).GetResponseStream();
+        HttpClient client = new();
+        await using Stream webStream = await (await client.GetAsync(url)).Content.ReadAsStreamAsync();
         using StreamReader reader = new(webStream);
         return (await reader.ReadToEndAsync()).Trim('[', '"', ']');
     }
