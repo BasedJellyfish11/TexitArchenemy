@@ -18,7 +18,7 @@ public class DiscordBotMain
     {
         DiscordSocketConfig config = new()
         {
-            GatewayIntents = GatewayIntents.DirectMessages | GatewayIntents.GuildMessages | GatewayIntents.Guilds,
+            GatewayIntents = GatewayIntents.DirectMessages | GatewayIntents.GuildMessages | GatewayIntents.Guilds | GatewayIntents.MessageContent
         };
         _client = new DiscordSocketClient(config);
         _client.Log += ArchenemyLogger.Log;

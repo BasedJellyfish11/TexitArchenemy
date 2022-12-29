@@ -35,55 +35,50 @@ public class Skeleton: ModuleBase<SocketCommandContext>
         
         string path = files[random.Next(0, files.Count)];
         Image image = await Image.LoadAsync(path);
-            
-        DrawingOptions options = new()
-        {
-
-            TextOptions = new TextOptions()
-            {
-                HorizontalAlignment = HorizontalAlignment.Center,
-                WrapTextWidth = image.Width
-            }
-        };
-
+        
         // Make sure the text fits by reducing the font until it does
-        Font font = new(SystemFonts.Find("Impact"), Math.Min(image.Width, image.Height) / 6f, FontStyle.Bold);
+        Font font = new(SystemFonts.Get("Impact"), Math.Min(image.Width, image.Height) / 6f, FontStyle.Bold);
+
+        TextOptions textOptions;
+
         FontRectangle allTextRectangle;
-        while ((allTextRectangle = TextMeasurer.Measure(string.Concat(upperText, Environment.NewLine, lowerText), new RendererOptions(font) { WrappingWidth = image.Width })).Height + MIDDLE_MARGIN > image.Height
+        
+        while ((allTextRectangle = TextMeasurer.Measure(string.Concat(upperText, Environment.NewLine, lowerText), (textOptions = new TextOptions(font) {HorizontalAlignment = HorizontalAlignment.Center, WrappingLength = image.Width}))).Height + MIDDLE_MARGIN > image.Height
                || allTextRectangle.Width > image.Width)
         {
             font = new Font(font, font.Size * 0.9f);
         }
+        
 
         // Brush and outline
         SolidBrush? brush = Brushes.Solid(Color.White);
         Pen? outlinePen = Pens.Solid(Color.Black, font.Size/20);
-            
+
+        textOptions.Origin = new PointF(image.Width/2f, 0);
+
         // Draw upper text at 0,0
         image.Mutate
         (
+            
             x => x.DrawText
             (
-                options,
+                textOptions,
                 upperText,
-                font,
                 brush,
-                outlinePen,
-                new PointF(0, 0)
+                outlinePen
             )
         );
 
-        FontRectangle bottomRectangleSize = TextMeasurer.Measure(string.Concat(lowerText), new RendererOptions(font) { WrappingWidth = image.Width });
+        FontRectangle bottomRectangleSize = TextMeasurer.Measure(lowerText,  textOptions);
+        textOptions.Origin = new PointF(image.Width/2f, image.Height - bottomRectangleSize.Height - BOTTOM_MARGIN);
         image.Mutate
         (
             x => x.DrawText
             (
-                options,
+                textOptions,
                 lowerText,
-                font,
                 brush,
-                outlinePen,
-                new PointF(0, image.Height - bottomRectangleSize.Height - BOTTOM_MARGIN) // Draw the bottom text as low as possible while still fitting the rectangle
+                outlinePen // Draw the bottom text as low as possible while still fitting the rectangle
             )
         );
 
