@@ -1,5 +1,5 @@
 ﻿using System;
-using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -32,7 +32,16 @@ public class CommandHandler
         
     private readonly DiscordSocketClient _client;
     private readonly CommandService _commands;
-    private readonly Random random = new();
+    private static readonly Random random = new();
+    private static readonly HttpClient client = new();
+
+    private class DataMuseResponse
+    {
+        public string Word { get; set; }
+        public int Score { get; set; }
+        public string[] Tags { get; set; }
+    }
+
     // Retrieve client and CommandService instance via ctor
     public CommandHandler(DiscordSocketClient client, CommandService commands)
     {
@@ -124,8 +133,8 @@ public class CommandHandler
         
     private static async Task<string> GetDnAcronym()
     {
-        Task<string> adjectiveRequest = WordWebRequest("https://random-word-form.herokuapp.com/random/adjective/d");
-        Task<string> nounRequest = WordWebRequest("https://random-word-form.herokuapp.com/random/noun/n");
+        Task<string> adjectiveRequest = WordWebRequest("https://api.datamuse.com/words?sp=d*&md=p", "adj");
+        Task<string> nounRequest = WordWebRequest("https://api.datamuse.com/words?sp=n*&md=p", "n");
 
         await Task.WhenAll(adjectiveRequest, nounRequest);
         return $"{await adjectiveRequest} {await nounRequest}";
@@ -154,14 +163,20 @@ public class CommandHandler
                            ,ArchenemyLogger.Log("The message was a repost lmao gottem", "Discord"));
     }
 
-    private static async Task<string> WordWebRequest(string url)
+    private static async Task<string> WordWebRequest(string url, string tag)
     {
-        HttpClient client = new();
-        await using Stream webStream = await (await client.GetAsync(url)).Content.ReadAsStreamAsync();
-        using StreamReader reader = new(webStream);
-        return (await reader.ReadToEndAsync()).Trim('[', '"', ']');
-    }
+        DataMuseResponse[]? museResponse = null;
+        HttpResponseMessage response = await client.GetAsync(url);
+        if (response.IsSuccessStatusCode)
+        {
+            museResponse = await response.Content.ReadAsAsync<DataMuseResponse[]>();
+        }
 
+        var wordsOfType = museResponse?.Where(x => x.Tags.Contains(tag)).Select(x => x.Word);
+
+        return wordsOfType?.ElementAt(random.Next(wordsOfType.Count()));
+    }
+    
         
     private static async Task<Match?> AttemptMatchArtLink(string? message)
     {
