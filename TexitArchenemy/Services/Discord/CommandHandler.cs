@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
@@ -17,7 +18,7 @@ public class CommandHandler
 {
     // language=regexp
     private const string TWITTER_REGEX = 
-        @"(?:^|\s)(?:https?):\/\/(?:www\.|mobile\.|m\.)?(?:fx)?(?:twitter|x|fxtwitter|girlcockx|hitlerx)(?:\.com\/)(?:[\w\-\*]*?\/)?(?:status|statuses)\/(\d{18,20})(?:\s|$|\?|\/)";        
+        @"(?:^|\s)(?:https?):\/\/(?:www\.|mobile\.|m\.)?(?:fx)?(twitter|x|fxtwitter|girlcockx|hitlerx)(?:\.com\/)(?:[\w\-\*]*?\/)?(?:status|statuses)\/(\d{18,20})(?:\s|$|\?|\/)";        
     // language=regexp
     private const string PIXIV_REGEX = 
         @"(?:^|\s)(?:https?):\/\/(?:www\.)?(pixiv)(?:\.net\/)(?:[\w|\/|\.|\?|\&|\=]*?)(?:(?:artworks\/|illust_id=)(\d{6,9}))(?:\s|$|&)";
@@ -34,6 +35,22 @@ public class CommandHandler
     private readonly CommandService _commands;
     private static readonly Random random = new();
     private static readonly HttpClient client = new();
+
+    private static readonly HashSet<ulong> RepostExcludedIds =
+    [
+        1271933270451552317, // reimu
+        1164651057243238400 // FixTweet
+    ];
+    
+    private static readonly HashSet<string> TwitterAliases =
+    [
+        "twitter",
+        "fxtwitter",
+        "hitlerx",
+        "girlcockx",
+        "x"
+    ];
+    
 
     private class DataMuseResponse
     {
@@ -142,6 +159,9 @@ public class CommandHandler
 
     private static async Task EnsureNotRepost(string? message, SocketCommandContext context)
     {
+        if(RepostExcludedIds.Contains(context.Message.Author.Id))
+            return;
+        
         await ArchenemyLogger.Log("A message was posted in a no repost channel! Checking...", "Discord");
         Match? match = await AttemptMatchArtLink(message);
         if (match == null)
@@ -150,9 +170,9 @@ public class CommandHandler
             return;
         }
 
-        await ArchenemyLogger.Log($"The message was matched to be an art link! Platform: {match.Groups[1].Value}, ID: {match.Groups[2].Value}. Checking for repost in channel {context.Channel} with ID {context.Channel.Id}", "Discord");
+        await ArchenemyLogger.Log($"The message was matched to be an art link! Platform: {NormalizePlatform(match.Groups[1].Value)}, ID: {match.Groups[2].Value}. Checking for repost in channel {context.Channel} with ID {context.Channel.Id}", "Discord");
             
-        (ulong messageId, ulong channelId)? isRepost = await SQLInteracter.CheckRepost(context.Message, match.Groups[2].Value, Enum.Parse<LinkTypes>(match.Groups[1].Value, true));
+        (ulong messageId, ulong channelId)? isRepost = await SQLInteracter.CheckRepost(context.Message, match.Groups[2].Value, Enum.Parse<LinkTypes>(NormalizePlatform(match.Groups[1].Value), true));
         if (!isRepost.HasValue)
         {
             await ArchenemyLogger.Log("Message wasn't a repost", "Discord");
@@ -188,6 +208,13 @@ public class CommandHandler
     {
         return await MatchesRegex(message, TWITTER_REGEX);
     }
+    
+    private static string NormalizePlatform(string platform)
+    {
+        string lower = platform.ToLower();
+        return TwitterAliases.Contains(lower) ? "twitter" : lower;
+    }
+    
     private static async Task<Match?> MatchPixiv(string? message)
     {
         return await MatchesRegex(message, PIXIV_REGEX);
