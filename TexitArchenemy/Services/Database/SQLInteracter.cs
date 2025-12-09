@@ -12,7 +12,7 @@ namespace TexitArchenemy.Services.Database;
 
 public static class SQLInteracter
 {
-    private const string CONNECTION_STRING = @"Data Source=.\SQLEXPRESS;Database=TEXIT_ARCHENEMY;Integrated Security=True;";
+    private static readonly string CONNECTION_STRING = $"Server=localhost;Database=TEXIT_ARCHENEMY;User Id=sa;Password={Environment.GetEnvironmentVariable("SQL_PW")};";    
     private const int SQL_EXCEPTION = -999;
     
         
