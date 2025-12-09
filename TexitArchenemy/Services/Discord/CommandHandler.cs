@@ -17,8 +17,7 @@ public class CommandHandler
 {
     // language=regexp
     private const string TWITTER_REGEX = 
-        @"(?:^|\s)(?:https?):\/\/(?:www\.|mobile\.|m\.)?(?:fx)?(twitter)(?:\.com\/)(?:[\w\-\*]*?\/)?(?:status|statuses)\/(\d{18,20})(?:\s|$|\?|\/)";
-        
+        @"(?:^|\s)(?:https?):\/\/(?:www\.|mobile\.|m\.)?(?:fx)?(?:twitter|x|fxtwitter|girlcockx|hitlerx)(?:\.com\/)(?:[\w\-\*]*?\/)?(?:status|statuses)\/(\d{18,20})(?:\s|$|\?|\/)";        
     // language=regexp
     private const string PIXIV_REGEX = 
         @"(?:^|\s)(?:https?):\/\/(?:www\.)?(pixiv)(?:\.net\/)(?:[\w|\/|\.|\?|\&|\=]*?)(?:(?:artworks\/|illust_id=)(\d{6,9}))(?:\s|$|&)";

@@ -24,10 +24,8 @@
             <Output TaskParameter="Include" ItemName="VenomFiles" />
         </CreateItem>
         <Copy SourceFiles="@(SkeletonFiles)" DestinationFolder="$(TargetDir)/Skeletons" />
-        <Exec Command="@echo on" />
         <Exec Command="echo Copied skeleton folder" />
         <Copy SourceFiles="@(VenomFiles)" DestinationFolder="$(TargetDir)/Venom" />
-        <Exec Command="@echo on" />
         <Exec Command="echo Copied venom folder" />
     </Target>
 
