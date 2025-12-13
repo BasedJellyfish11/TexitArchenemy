@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -34,78 +35,105 @@ public class Ask : ModuleBase<SocketCommandContext>
     [UsedImplicitly]
     public async Task QueryLLM(params string[] originalMessage)
     {
-
-        string message = string.Join(' ', originalMessage);        
-
-        await ArchenemyLogger.Log($"Received Ask command with message {message}", "Discord");
-
-        if (!Client.DefaultRequestHeaders.Contains("Authorization"))
-            Client.DefaultRequestHeaders.Add("Authorization",
-                $"Bearer {Environment.GetEnvironmentVariable("GROQ_TOKEN")}");
         
-        
-        string jsonContent = $$"""
-                               {
-                                 "model": "llama-3.3-70b-versatile",
-                                 "messages": [
-                                   {
-                                     "role": "system",
-                                     "content": "You are an LLM assistant answering questions in an informal context.\n ## Core Principles\nThe user can only interact with you once, so you don't prompt for follow ups or similar.\n CRITICAL: You always keep you messages under 2000 characters due to client side restrictions regarding maximum string size.\n Never use emojis unless specifically asked."
-                                   },
-                                   {
-                                     "role": "user",
-                                     "content": "{{message}}"
-                                   }
-                                 ]
-                               }
-                               """;
+            string message = string.Join(' ', originalMessage);
 
-        StringContent content = new(jsonContent, Encoding.UTF8, "application/json");
+            var systemPrompt = new
+            {
+                role = "system",
+                content = """
+                          ## Core Principles
+                          - CRITICAL: You always keep you messages under 1000 characters. Your messages are sent to a messaging app that cannot handle messages over 2000 characters. Failure to comply with this causes critical failure. This directive is absolute and covers any situation, including medical or life advice ones. Not following this directive means the user NEVER SEES YOUR MESSAGE due to a crash, leaving them at risk.
+                          - You value being concise and accurate. Verbosity is always seen as a flaw.
+                          - The user can only interact with you once, so you don't prompt for follow ups or similar.
+                          - You triple check message length. Common pitfalls to this include not counting every character and ignoring things like styling. Any and all characters should be counted, including spaces, markdown formatting, and anything else that may be included in your response.
+                          ## Validation checklist
+                          - Is the entire string content of the reply <1000 characters?
+                          - Is the reply overly verbose? Have I added weasel words or otherwise beautified the message? Can it be more concise?
+                          """
+            };
+            
+            await ArchenemyLogger.Log($"Received Ask command with message {message}", "Discord");
 
-        await ArchenemyLogger.Log($"Asking Llama", "Discord");
+            if (!Client.DefaultRequestHeaders.Contains("Authorization"))
+                Client.DefaultRequestHeaders.Add("Authorization",
+                    $"Bearer {Environment.GetEnvironmentVariable("GROQ_TOKEN")}");
 
-        HttpResponseMessage response = await Client.PostAsync(
-            @"https://api.groq.com/openai/v1/chat/completions",
-            content
-        );
-        
-        // If rate limited (429), retry with qwen model
-        if (response.StatusCode == HttpStatusCode.TooManyRequests)
-        {
-            await ArchenemyLogger.Log("Llama Rate limited (429). Retrying with qwen model...", "Discord");
 
-            string qwenJsonContent = $$"""
-                                       {
-                                         "model": "qwen/qwen3-32b",
-                                         "messages": [
-                                           {
-                                             "role": "system",
-                                             "content": "You are an LLM assistant answering questions in an informal context.\n ## Core Principles\nThe user can only interact with you once, so you don't prompt for follow ups or similar.\n CRITICAL: You always keep you messages under 2000 characters due to client side restrictions regarding maximum string size.\n Never use emojis unless specifically asked."
-                                           },
-                                           {
-                                             "role": "user",
-                                             "content": "{{message}}"
-                                           }
-                                         ]
-                                       }
-                                       """;
+            var request = new
+            {
+                model = "llama-3.3-70b-versatile",
+                messages = new[]
+                {
+                    systemPrompt,
+                    new
+                    {
+                        role = "user",
+                        content = message
+                    }
+                }
+            };
 
-            StringContent qwenContent = new(qwenJsonContent, Encoding.UTF8, "application/json");
+            // Serialize to JSON (this will properly escape newlines)
+            string jsonContent = System.Text.Json.JsonSerializer.Serialize(request);
 
-            response = await Client.PostAsync(
+
+            StringContent content = new(jsonContent, Encoding.UTF8, "application/json");
+
+            await ArchenemyLogger.Log($"Asking GPT", "Discord");
+
+            HttpResponseMessage response = await Client.PostAsync(
                 @"https://api.groq.com/openai/v1/chat/completions",
-                qwenContent
+                content
             );
+
+            string responseBody = await response.Content.ReadAsStringAsync();
+            await ArchenemyLogger.Log($"Response {responseBody}", "Discord");
+
+            
+            // If rate limited (429), retry with qwen model
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                await ArchenemyLogger.Log("GPT Rate limited (429). Retrying with Llama model...", "Discord");
+
+                
+                var llamaRequest = new
+                {
+                    model = "llama-3.3-70b-versatile",
+                    messages = new[]
+                    {
+                        systemPrompt,
+                        new
+                        {
+                            role = "user",
+                            content = message
+                        }
+                    }
+                };
+                
+                string llamaJsonContent = System.Text.Json.JsonSerializer.Serialize(llamaRequest);
+
+
+                StringContent qwenContent = new(llamaJsonContent, Encoding.UTF8, "application/json");
+
+                response = await Client.PostAsync(
+                    @"https://api.groq.com/openai/v1/chat/completions",
+                    qwenContent
+                );
+            }
+
+            GroqResponse? groqResponse = null;
+            if (response.IsSuccessStatusCode)
+            {
+                groqResponse = await response.Content.ReadAsAsync<GroqResponse>();
+                await ArchenemyLogger.Log($"Got LLM response {groqResponse?.Choices.First().Message.Content}",
+                    "Discord");
+            }
+
+
+            await ReplyAsync(groqResponse?.Choices[0].Message.Content);
+            await ArchenemyLogger.Log($"Ended Ask command successfully for message {message}", "Discord");
         }
 
-        GroqResponse? groqResponse = null;
-        if (response.IsSuccessStatusCode)
-        {
-            groqResponse = await response.Content.ReadAsAsync<GroqResponse>();
-        }
-
-        await ArchenemyLogger.Log($"Ended Ask command successfully for message {message}", "Discord");
-        await ReplyAsync(groqResponse?.Choices[0].Message.Content);
-    }
     
 }
