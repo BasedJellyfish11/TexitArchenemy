@@ -1,199 +1,218 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.SqlClient;
+using System.Linq;
 using System.Threading.Tasks;
 using Discord.WebSocket;
+using Npgsql;
+using NpgsqlTypes;
 
-// It appears Connections in .NET are handled the opposite of how I was taught in uni: You open a new one every query, preferably inside a using, and .NET is so smart that it pools it
-// That's what I get from here anyway https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql-server-connection-pooling and here https://docs.microsoft.com/en-us/dotnet/api/system.data.sqlclient.sqlconnection?view=dotnet-plat-ext-5.0#remarks
+// Open a new connection per query inside a using block, let Npgsql's built-in connection pool handle the lifetime.
+// Npgsql pooling docs: https://www.npgsql.org/doc/connection-string-parameters.html#pooling
 
 namespace TexitArchenemy.Services.Database;
 
 public static class SQLInteracter
 {
-    private static readonly string CONNECTION_STRING = $"Server=localhost;Database=TEXIT_ARCHENEMY;User Id=sa;Password={Environment.GetEnvironmentVariable("SQL_PW")};";    
+    private static readonly string CONNECTION_STRING =
+        $"Host=localhost;Database=texit_archenemy;" +
+        $"Username={Environment.GetEnvironmentVariable("PG_USER")};" +
+        $"Password={Environment.GetEnvironmentVariable("PG_PASSWORD")};";
+
     private const int SQL_EXCEPTION = -999;
-    
-        
+
+
     public static async Task<string> GetDiscordToken()
     {
-        await using SqlConnection connection = new(CONNECTION_STRING);
-        await using SqlDataReader? reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_discord_creds, connection);
-            
-        if(!reader.HasRows)
+        await using NpgsqlConnection connection = new(CONNECTION_STRING);
+        await using NpgsqlDataReader reader =
+            await ExecuteReturnQueryFunction(ProcedureNames.get_discord_creds, connection);
+
+        if (!reader.HasRows)
             throw new InvalidOperationException(NoRowsError(ProcedureNames.get_discord_creds));
 
-        reader.Read();
+        await reader.ReadAsync();
         return reader[DiscordAuthColumns.token].ToString()!;
     }
 
-    public static async Task<(ulong messageId, ulong channelId)?> CheckRepost(SocketMessage message, string linkId, LinkTypes linkType )
+    public static async Task<(ulong messageId, ulong channelId)?> CheckRepost(
+        SocketMessage message, string linkId, LinkTypes linkType)
     {
-        await using SqlConnection connection = new(CONNECTION_STRING);
-        SqlParameter[] parameters =
+        await using NpgsqlConnection connection = new(CONNECTION_STRING);
+
+        NpgsqlParameter[] parameters =
         {
-            new($"@{CheckRepostParams.channel_id}", SqlDbType.VarChar),
-            new($"@{CheckRepostParams.message_id}", SqlDbType.VarChar),
-            new($"@{CheckRepostParams.link_id}", SqlDbType.VarChar),
-            new($"@{CheckRepostParams.link_type_description}", SqlDbType.VarChar),
+            new($"@{CheckRepostParams.channel_id}",          NpgsqlDbType.Varchar),
+            new($"@{CheckRepostParams.message_id}",          NpgsqlDbType.Varchar),
+            new($"@{CheckRepostParams.link_id}",             NpgsqlDbType.Varchar),
+            new($"@{CheckRepostParams.link_type_description}",NpgsqlDbType.Varchar),
         };
-            
+
         parameters[0].Value = message.Channel.Id.ToString();
         parameters[1].Value = message.Id.ToString();
         parameters[2].Value = linkId;
         parameters[3].Value = linkType.ToString();
-            
-        await using SqlDataReader? reader = await ExecuteReturnQueryProcedure(ProcedureNames.check_repost, connection, parameters);
-            
-        if(!reader.HasRows)
+
+        await using NpgsqlDataReader reader =
+            await ExecuteReturnQueryFunction(ProcedureNames.check_repost, connection, parameters);
+
+        if (!reader.HasRows)
             throw new InvalidOperationException(NoRowsError(ProcedureNames.check_repost));
 
-        reader.Read();
+        await reader.ReadAsync();
 
-        ValueTuple<string, string> stringTuple = ((string) reader[RepostRepositoryColumns.message_id], (string) reader[RepostRepositoryColumns.channel_id]);
+        var stringTuple = ((string)reader[RepostRepositoryColumns.message_id],
+            (string)reader[RepostRepositoryColumns.channel_id]);
 
         if (stringTuple.Item1 == "-1" || stringTuple.Item2 == "-1")
             return null;
-        return (ulong.Parse(stringTuple.Item1), ulong.Parse(stringTuple.Item2));
 
+        return (ulong.Parse(stringTuple.Item1), ulong.Parse(stringTuple.Item2));
     }
-    
-        
+
     public static async Task<List<string?>> GetBoxWarmup(int level)
     {
-        await using SqlConnection connection = new(CONNECTION_STRING);
-            
-        SqlParameter[] parameters =
+        await using NpgsqlConnection connection = new(CONNECTION_STRING);
+
+        NpgsqlParameter[] parameters =
         {
-            new($"@{GetBoxWarmupParams.lesson}", SqlDbType.Int)
+            new($"@{GetBoxWarmupParams.lesson}", NpgsqlDbType.Integer)
         };
         parameters[0].Value = level;
 
-        SqlDataReader? reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_box_warmup,connection, parameters);
+        NpgsqlDataReader reader =
+            await ExecuteReturnQueryFunction(ProcedureNames.get_box_warmup, connection, parameters);
 
         List<string?> warmups = new();
-        while (reader.Read())
-        {
+        while (await reader.ReadAsync())
             warmups.Add(reader[BoxWarmupColumns.warmup].ToString());
-        }
-            
-        return warmups;
 
+        return warmups;
     }
-        
+
     public static async Task<int> UpdateBoxChallengeProgress(int boxesDrawn, SocketUser user)
     {
-        await using SqlConnection connection = new(CONNECTION_STRING);
-            
-        SqlParameter[] parameters =
+        await using NpgsqlConnection connection = new(CONNECTION_STRING);
+
+        NpgsqlParameter[] parameters =
         {
-            new($"@{UpdateBoxChallengeProgressParams.user_id}", SqlDbType.VarChar),
-            new($"@{UpdateBoxChallengeProgressParams.boxes_drawn}", SqlDbType.Int)
+            new($"@{UpdateBoxChallengeProgressParams.user_id}",    NpgsqlDbType.Varchar),
+            new($"@{UpdateBoxChallengeProgressParams.boxes_drawn}", NpgsqlDbType.Integer)
         };
         parameters[0].Value = user.Id.ToString();
         parameters[1].Value = boxesDrawn;
 
-        SqlDataReader? reader = await ExecuteReturnQueryProcedure(ProcedureNames.update_box_challenge_progress,connection, parameters);
+        NpgsqlDataReader reader =
+            await ExecuteReturnQueryFunction(ProcedureNames.update_box_challenge_progress, connection, parameters);
 
-        reader.Read();
-            
+        await reader.ReadAsync();
         return (int)reader[BoxChallengeColumns.boxes_drawn];
-
     }
-        
+
     public static async Task<int> GetBoxChallengeProgress(SocketUser user)
     {
-        await using SqlConnection connection = new(CONNECTION_STRING);
-            
-        SqlParameter[] parameters =
+        await using NpgsqlConnection connection = new(CONNECTION_STRING);
+
+        NpgsqlParameter[] parameters =
         {
-            new($"@{UpdateBoxChallengeProgressParams.user_id}", SqlDbType.VarChar),
+            new($"@{UpdateBoxChallengeProgressParams.user_id}", NpgsqlDbType.Varchar),
         };
         parameters[0].Value = user.Id.ToString();
 
-        SqlDataReader? reader = await ExecuteReturnQueryProcedure(ProcedureNames.get_box_challenge_progress,connection, parameters);
+        NpgsqlDataReader reader =
+            await ExecuteReturnQueryFunction(ProcedureNames.get_box_challenge_progress, connection, parameters);
 
-        reader.Read();
-            
+        await reader.ReadAsync();
         return (int)reader[BoxChallengeColumns.boxes_drawn];
-
     }
-        
+
     public static async Task<bool> IsRepostChannel(ulong channelID)
     {
-        await using SqlConnection connection = new(CONNECTION_STRING);
-            
-        SqlParameter[] parameters =
+        await using NpgsqlConnection connection = new(CONNECTION_STRING);
+
+        NpgsqlParameter[] parameters =
         {
-            new($"@{IsRepostChannelParams.channel_id}", SqlDbType.VarChar),
+            new($"@{IsRepostChannelParams.channel_id}", NpgsqlDbType.Varchar),
         };
         parameters[0].Value = channelID.ToString();
 
-        SqlDataReader? reader = await ExecuteReturnQueryProcedure(ProcedureNames.is_repost_channel,connection, parameters);
+        NpgsqlDataReader reader =
+            await ExecuteReturnQueryFunction(ProcedureNames.is_repost_channel, connection, parameters);
 
-        reader.Read();
-            
+        await reader.ReadAsync();
         return (bool)reader[DiscordChannelsColumns.repost_check];
     }
-    public static async Task MarkAsRepostChannel(SocketGuildChannel contextChannel)
-    { 
-                        
-        SqlParameter[] parameters =
-        {
-            new($"@{MarkAsRepostChannelParams.channel_id}", SqlDbType.VarChar),
-            new($"@{MarkAsRepostChannelParams.guild_id}", SqlDbType.VarChar)
 
+    public static async Task MarkAsRepostChannel(SocketGuildChannel contextChannel)
+    {
+        NpgsqlParameter[] parameters =
+        {
+            new($"@{MarkAsRepostChannelParams.channel_id}", NpgsqlDbType.Varchar),
+            new($"@{MarkAsRepostChannelParams.guild_id}",   NpgsqlDbType.Varchar)
         };
         parameters[0].Value = contextChannel.Id.ToString();
         parameters[1].Value = contextChannel.Guild.Id.ToString();
-            
-        await ExecuteReturnValueProcedure(ProcedureNames.mark_as_repost_channel, parameters);
+
+        await ExecuteVoidProcedure(ProcedureNames.mark_as_repost_channel, parameters);
     }
-        
+
+
     #region helper functions
-    private static async Task<SqlDataReader> ExecuteReturnQueryProcedure(string procedure_name, SqlConnection conn, SqlParameter[]? parameters = null)
+    
+    private static async Task<NpgsqlDataReader> ExecuteReturnQueryFunction(
+        string function_name, NpgsqlConnection conn, NpgsqlParameter[]? parameters = null)
     {
         await conn.OpenAsync();
-        SqlCommand sqlComm = new(procedure_name, conn) {CommandType = CommandType.StoredProcedure};
+
+        string paramList = parameters is { Length: > 0 }
+            ? string.Join(", ", parameters.Select(p => p.ParameterName))
+            : string.Empty;
+
+        NpgsqlCommand cmd = new($"SELECT * FROM {function_name}({paramList})", conn)
+        {
+            CommandType    = CommandType.Text,
+            CommandTimeout = 300
+        };
+
         if (parameters != null)
-            sqlComm.Parameters.AddRange(parameters);
-        sqlComm.CommandTimeout = 300;
-            
-        SqlDataReader reader = await sqlComm.ExecuteReaderAsync();
-        return reader;
-           
+            cmd.Parameters.AddRange(parameters);
+
+        return await cmd.ExecuteReaderAsync();
     }
-
-
-    private static async Task<int> ExecuteReturnValueProcedure(string procedure_name, SqlParameter[]? parameters = null)
+    
+    
+    private static async Task<int> ExecuteVoidProcedure(
+        string procedure_name, NpgsqlParameter[]? parameters = null)
     {
-        await using SqlConnection conn = new(CONNECTION_STRING);
+        await using NpgsqlConnection conn = new(CONNECTION_STRING);
         await conn.OpenAsync();
-        SqlCommand sqlComm = new(procedure_name, conn) {CommandType = CommandType.StoredProcedure};
+
+        string paramList = parameters is { Length: > 0 }
+            ? string.Join(", ", parameters.Select(p => p.ParameterName))
+            : string.Empty;
+
+        NpgsqlCommand cmd = new($"CALL {procedure_name}({paramList})", conn)
+        {
+            CommandType    = CommandType.Text,
+            CommandTimeout = 300
+        };
+
         if (parameters != null)
-            sqlComm.Parameters.AddRange(parameters);
-        sqlComm.CommandTimeout = 300;
-        SqlParameter? returnValueIndex = sqlComm.Parameters.Add("@RETURN_VALUE", SqlDbType.Int);
-        returnValueIndex.Direction = ParameterDirection.ReturnValue;
+            cmd.Parameters.AddRange(parameters);
 
         try
         {
-            await sqlComm.ExecuteNonQueryAsync();
+            await cmd.ExecuteNonQueryAsync();
+            return 0;
         }
-        catch (SqlException)
+        catch (NpgsqlException)
         {
-            return -999;
+            return SQL_EXCEPTION;
         }
-
-        return (int) returnValueIndex.Value;
     }
 
-    private static string NoRowsError(string procedure)
-    {
-        return $"The \"{procedure}\" stored procedure returned no rows. Have you populated the database?";
-    }
+    private static string NoRowsError(string function) =>
+        $"The \"{function}\" function returned no rows. Have you populated the database?";
 
     #endregion
-        
 }

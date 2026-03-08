@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFramework>net7.0</TargetFramework>
+        <TargetFramework>net8.0</TargetFramework>
         <Nullable>enable</Nullable>
         <LangVersion>latest</LangVersion>
         <PublishSingleFile>true</PublishSingleFile>
@@ -14,8 +14,8 @@
       <PackageReference Include="Microsoft.AspNet.WebApi.Client" Version="6.0.0" />
       <PackageReference Include="SixLabors.ImageSharp" Version="2.1.3" />
       <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="1.0.0-beta15" />
-      <PackageReference Include="System.Data.SqlClient" Version="4.8.5" />
-      <PackageReference Include="TweetinviAPI" Version="5.0.4" />
+        <PackageReference Include="Npgsql" Version="8.0.5" />
+        <PackageReference Include="TweetinviAPI" Version="5.0.4" />
     </ItemGroup>  
     
     <Target Name="PostBuild" AfterTargets="PostBuildEvent">
