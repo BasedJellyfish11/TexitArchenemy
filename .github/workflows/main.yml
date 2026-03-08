@@ -1,0 +1,39 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build
+        run: dotnet publish TexitArchenemy/TexitArchenemy.csproj -c Release -r linux-x64 --self-contained true
+
+      - name: Add SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HETZNER_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan 204.168.147.227 >> ~/.ssh/known_hosts
+
+      - name: Upload binary
+        run: scp -r TexitArchenemy/bin/Release/net8.0/linux-x64/publish/ root@204.168.147.227:/root/archenemy-bot/publish
+
+      - name: Upload assets
+        run: |
+          scp -r Skeletons root@204.168.147.227:/root/archenemy-bot/publish/Skeletons
+          scp -r Venom root@204.168.147.227:/root/archenemy-bot/publish/Venom
+
+      - name: Restart service
+        run: ssh root@204.168.147.227 "chmod +x /root/archenemy-bot/publish/TexitArchenemy && systemctl restart archenemy-bot"
