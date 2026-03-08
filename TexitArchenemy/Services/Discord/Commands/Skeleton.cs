@@ -39,16 +39,14 @@ public class Skeleton: ModuleBase<SocketCommandContext>
         // Make sure the text fits by reducing the font until it does
         Font font = new(SystemFonts.Get("Impact"), Math.Min(image.Width, image.Height) / 6f, FontStyle.Bold);
 
-        TextOptions textOptions;
-
+        RichTextOptions textOptions;
         FontRectangle allTextRectangle;
         
-        while ((allTextRectangle = TextMeasurer.Measure(string.Concat(upperText, Environment.NewLine, lowerText), (textOptions = new TextOptions(font) {HorizontalAlignment = HorizontalAlignment.Center, WrappingLength = image.Width}))).Height + MIDDLE_MARGIN > image.Height
+        while ((allTextRectangle = TextMeasurer.MeasureSize(string.Concat(upperText, Environment.NewLine, lowerText), (textOptions = new RichTextOptions(font) { HorizontalAlignment = HorizontalAlignment.Center, WrappingLength = image.Width }))).Height + MIDDLE_MARGIN > image.Height
                || allTextRectangle.Width > image.Width)
         {
             font = new Font(font, font.Size * 0.9f);
         }
-        
 
         // Brush and outline
         SolidBrush? brush = Brushes.Solid(Color.White);
@@ -59,7 +57,6 @@ public class Skeleton: ModuleBase<SocketCommandContext>
         // Draw upper text at 0,0
         image.Mutate
         (
-            
             x => x.DrawText
             (
                 textOptions,
@@ -69,7 +66,7 @@ public class Skeleton: ModuleBase<SocketCommandContext>
             )
         );
 
-        FontRectangle bottomRectangleSize = TextMeasurer.Measure(lowerText,  textOptions);
+        FontRectangle bottomRectangleSize = TextMeasurer.MeasureSize(lowerText, textOptions);
         textOptions.Origin = new PointF(image.Width/2f, image.Height - bottomRectangleSize.Height - BOTTOM_MARGIN);
         image.Mutate
         (
@@ -89,10 +86,5 @@ public class Skeleton: ModuleBase<SocketCommandContext>
         await Context.Channel.SendFileAsync(stream, "skeleton.png");
             
         await ArchenemyLogger.Log($"Executed command Skeleton for user {Context.User} in channel {Context.Channel} {Context.Channel.Id}", "Discord");
-
-
     }
-    
-    
-        
 }
