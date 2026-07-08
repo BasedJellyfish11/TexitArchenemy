@@ -117,6 +117,10 @@ public class CommandHandler
             return;
         if (context.Message.Author.Id != _client.CurrentUser.Id)
         {
+            // Replying to one of the bot's !ask answers continues that LLM conversation
+            if (await LLMChatService.TryContinueConversation(context))
+                return;
+
             if (message == "test")
             {
                 await context.Channel.SendMessageAsync($"{context.Message.Author.Mention} How about you test these nuts");
