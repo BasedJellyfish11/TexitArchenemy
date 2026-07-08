@@ -170,7 +170,11 @@ public static class LLMChatService
 
         try
         {
-            string? answer = await QueryModel(conversation);
+            // The NVIDIA endpoint regularly takes 10-40 seconds, so show a typing
+            // indicator while the user waits
+            string? answer;
+            using (userMessage.Channel.EnterTypingState())
+                answer = await QueryModel(conversation);
             if (string.IsNullOrWhiteSpace(answer))
             {
                 await userMessage.ReplyAsync("The LLM returned nothing, try again later.");

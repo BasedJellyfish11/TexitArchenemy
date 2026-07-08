@@ -68,8 +68,13 @@ public class CommandHandler
     
     public async Task InstallCommandsAsync()
     {
-        // Hook the MessageReceived event into our command handler
-        _client.MessageReceived += HandleCommandAsync;
+        // Handle messages off the gateway task: slow handlers (like LLM calls) would
+        // otherwise block every other event until they finish
+        _client.MessageReceived += message =>
+        {
+            _ = Task.Run(() => HandleCommandSafeAsync(message));
+            return Task.CompletedTask;
+        };
 
         // Here we discover all of the command modules in the entry 
         // assembly and load them. Starting from Discord.NET 2.0, a
@@ -80,6 +85,19 @@ public class CommandHandler
         // If you do not use Dependency Injection, pass null.
         // See Dependency Injection guide for more information.
         await _commands.AddModulesAsync(Assembly.GetEntryAssembly(), null);
+    }
+
+    // Exceptions must be caught and logged here: nothing observes the Task.Run task above
+    private async Task HandleCommandSafeAsync(SocketMessage messageParam)
+    {
+        try
+        {
+            await HandleCommandAsync(messageParam);
+        }
+        catch (Exception e)
+        {
+            await ArchenemyLogger.Log($"Unhandled exception while handling a message: {e}", "Discord");
+        }
     }
 
     private async Task HandleCommandAsync(SocketMessage messageParam)
