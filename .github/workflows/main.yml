@@ -27,13 +27,16 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan 204.168.147.227 >> ~/.ssh/known_hosts
 
+      # scp -r <dir> into an existing directory nests it (publish/publish) instead of
+      # replacing it, so always copy directory *contents* with a glob
       - name: Upload binary
-        run: scp -r TexitArchenemy/bin/Release/net10.0/linux-x64/publish/ root@204.168.147.227:/root/archenemy-bot/publish
+        run: scp -r TexitArchenemy/bin/Release/net10.0/linux-x64/publish/* root@204.168.147.227:/root/archenemy-bot/publish/
 
       - name: Upload assets
         run: |
-          scp -r Skeletons root@204.168.147.227:/root/archenemy-bot/publish/Skeletons
-          scp -r Venom root@204.168.147.227:/root/archenemy-bot/publish/Venom
+          ssh root@204.168.147.227 "mkdir -p /root/archenemy-bot/publish/Skeletons /root/archenemy-bot/publish/Venom"
+          scp -r Skeletons/* root@204.168.147.227:/root/archenemy-bot/publish/Skeletons/
+          scp -r Venom/* root@204.168.147.227:/root/archenemy-bot/publish/Venom/
 
       - name: Restart service
-        run: ssh root@204.168.147.227 "chmod +x /root/archenemy-bot/publish/TexitArchenemy && systemctl restart archenemy-bot"
+        run: ssh root@204.168.147.227 "chmod +x /root/archenemy-bot/publish/TexitArchenemy && systemctl restart archenemy-bot && sleep 5 && systemctl is-active archenemy-bot"
