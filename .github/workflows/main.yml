@@ -27,10 +27,13 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan 204.168.147.227 >> ~/.ssh/known_hosts
 
-      # scp -r <dir> into an existing directory nests it (publish/publish) instead of
-      # replacing it, so always copy directory *contents* with a glob
+      # The running binary can't be overwritten in place (text file busy), so upload it
+      # under a temp name and swap it in during the restart. If publishing ever produces
+      # more files than the binary and the pdb, they need to be added here.
       - name: Upload binary
-        run: scp -r TexitArchenemy/bin/Release/net10.0/linux-x64/publish/* root@204.168.147.227:/root/archenemy-bot/publish/
+        run: |
+          scp TexitArchenemy/bin/Release/net10.0/linux-x64/publish/TexitArchenemy root@204.168.147.227:/root/archenemy-bot/publish/TexitArchenemy.new
+          scp TexitArchenemy/bin/Release/net10.0/linux-x64/publish/TexitArchenemy.pdb root@204.168.147.227:/root/archenemy-bot/publish/
 
       - name: Upload assets
         run: |
@@ -39,4 +42,4 @@ jobs:
           scp -r Venom/* root@204.168.147.227:/root/archenemy-bot/publish/Venom/
 
       - name: Restart service
-        run: ssh root@204.168.147.227 "chmod +x /root/archenemy-bot/publish/TexitArchenemy && systemctl restart archenemy-bot && sleep 5 && systemctl is-active archenemy-bot"
+        run: ssh root@204.168.147.227 "mv /root/archenemy-bot/publish/TexitArchenemy.new /root/archenemy-bot/publish/TexitArchenemy && chmod +x /root/archenemy-bot/publish/TexitArchenemy && systemctl restart archenemy-bot && sleep 5 && systemctl is-active archenemy-bot"
