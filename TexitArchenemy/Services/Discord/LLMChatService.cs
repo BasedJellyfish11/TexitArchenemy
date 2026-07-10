@@ -15,7 +15,10 @@ namespace TexitArchenemy.Services.Discord;
 public static class LLMChatService
 {
     private const string API_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
-    private const string MODEL = "minimaxai/minimax-m3";
+
+    // Models to try in order. Both handle text, images and video. NVIDIA's shared endpoint
+    // marks models as DEGRADED from time to time, so a fallback keeps the command alive.
+    private static readonly string[] Models = ["minimaxai/minimax-m3", "qwen/qwen3.5-397b-a17b"];
 
     private const int MAX_REQUESTS_PER_MINUTE = 15;
     private const int MAX_CONVERSATION_MESSAGES = 30;
@@ -177,7 +180,7 @@ public static class LLMChatService
                 answer = await QueryModel(conversation);
             if (string.IsNullOrWhiteSpace(answer))
             {
-                await userMessage.ReplyAsync("The LLM returned nothing, try again later.");
+                await userMessage.ReplyAsync("None of the LLMs answered, try again later.");
                 return;
             }
 
@@ -196,9 +199,21 @@ public static class LLMChatService
     {
         List<object> messages = [new { role = "system", content = SYSTEM_PROMPT }, .. conversation];
 
+        foreach (string model in Models)
+        {
+            string? answer = await TryQueryModel(model, messages);
+            if (!string.IsNullOrWhiteSpace(answer))
+                return answer;
+        }
+
+        return null;
+    }
+
+    private static async Task<string?> TryQueryModel(string model, List<object> messages)
+    {
         var request = new
         {
-            model = MODEL,
+            model,
             messages,
             max_tokens = 8192,
             temperature = 1.00,
@@ -207,13 +222,15 @@ public static class LLMChatService
         };
 
         string requestJson = JsonSerializer.Serialize(request);
-        await ArchenemyLogger.Log($"Asking {MODEL}", "Discord");
+        await ArchenemyLogger.Log($"Asking {model}", "Discord");
 
         HttpResponseMessage response = await Client.PostAsync(API_URL, new StringContent(requestJson, Encoding.UTF8, "application/json"));
         string responseBody = await response.Content.ReadAsStringAsync();
         await ArchenemyLogger.Log($"LLM response: {responseBody}", "Discord");
 
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+            return null;
+
         return ExtractAnswer(responseBody);
     }
 
