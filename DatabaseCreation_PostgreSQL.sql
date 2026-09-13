@@ -10,6 +10,14 @@
 
 
 -- ============================================================
+-- EXTENSIONS
+-- ============================================================
+
+-- Used for fuzzy skill-name search (search_uma_skill / uma_skills_trgm index).
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+
+-- ============================================================
 -- TABLES
 -- ============================================================
 
@@ -93,6 +101,105 @@ INSERT INTO draw_a_box_warmups (warmup, lesson) VALUES
 CREATE TABLE draw_a_box_box_challenge (
     user_id     VARCHAR(20) PRIMARY KEY,
     boxes_drawn INT NOT NULL
+);
+
+-- ---- Uma Musume ----
+
+CREATE TABLE uma_characters (
+    char_id           INT PRIMARY KEY,
+    name_en           VARCHAR(200) NOT NULL,
+    name_jp           VARCHAR(200),
+    name_tw           VARCHAR(200),
+    url_name          VARCHAR(200),
+    height            INT,
+    birth_day         INT,
+    birth_month       INT,
+    birth_year        INT,
+    sex               INT,
+    bust              INT,
+    waist             INT,
+    hip               INT,
+    va_en             VARCHAR(200),
+    va_ja             VARCHAR(200),
+    va_link           VARCHAR(500),
+    playable          BOOLEAN,
+    playable_en       BOOLEAN,
+    active_en         BOOLEAN     NOT NULL DEFAULT FALSE,
+    rl_active         VARCHAR(50),
+    rl_country        VARCHAR(10),
+    rl_death          VARCHAR(20),
+    rl_earnings       BIGINT,
+    rl_earnings_other JSONB,
+    rl_races          INT,
+    rl_record         VARCHAR(20),
+    rl_wins           INT,
+    last_updated      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE uma_cards (
+    card_id     INT PRIMARY KEY,
+    char_id     INT          NOT NULL,
+    name_en     VARCHAR(200) NOT NULL,
+    version     VARCHAR(100),
+    title_en_gl VARCHAR(200)
+);
+
+CREATE TABLE uma_skills (
+    skill_id              INT PRIMARY KEY,
+    parent_skill_id       INT,
+    name_en               VARCHAR(200) NOT NULL,
+    name_jp               VARCHAR(200),
+    rarity                INT          NOT NULL,
+    icon_id               INT,
+    available_in_en       BOOLEAN      NOT NULL DEFAULT FALSE,
+    condition_groups_json JSONB        NOT NULL,
+    conditions_hash       VARCHAR(64),
+    last_llm_update       TIMESTAMPTZ,
+    last_updated          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    base_time_ms          INT,
+    FOREIGN KEY (parent_skill_id) REFERENCES uma_skills(skill_id)
+);
+
+-- Powers fuzzy skill-name lookups in search_uma_skill().
+CREATE INDEX uma_skills_trgm ON uma_skills USING gin (name_en gin_trgm_ops);
+
+-- Note: char_id has no FK to uma_cards on the deployed DB — captured as-is.
+CREATE TABLE uma_skill_characters (
+    skill_id INT NOT NULL,
+    char_id  INT NOT NULL,
+    PRIMARY KEY (skill_id, char_id),
+    FOREIGN KEY (skill_id) REFERENCES uma_skills(skill_id) ON DELETE CASCADE
+);
+
+CREATE TABLE uma_skill_readable_groups (
+    skill_id              INT NOT NULL,
+    group_index           INT NOT NULL,
+    readable_precondition TEXT,
+    readable_condition    TEXT,
+    readable_effects      TEXT,
+    PRIMARY KEY (skill_id, group_index),
+    FOREIGN KEY (skill_id) REFERENCES uma_skills(skill_id) ON DELETE CASCADE
+);
+
+CREATE TABLE uma_condition_types (
+    condition_name   VARCHAR(100) PRIMARY KEY,
+    description      TEXT         NOT NULL,
+    example          VARCHAR(200),
+    example_meaning  TEXT
+);
+
+CREATE TABLE uma_effect_types (
+    effect_type_id   INT PRIMARY KEY,
+    key_name         VARCHAR(100) NOT NULL,
+    display_name     VARCHAR(100) NOT NULL,
+    neg_display_name VARCHAR(100)
+);
+
+CREATE TABLE uma_manifest_hashes (
+    manifest_key VARCHAR(100) PRIMARY KEY,
+    hash_token   VARCHAR(20) NOT NULL,
+    last_checked TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_changed TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 
@@ -302,6 +409,154 @@ END;
 $$;
 
 
+-- ---- Uma Musume ----
+
+CREATE OR REPLACE FUNCTION get_condition_descriptions(p_names VARCHAR(100)[])
+RETURNS TABLE(condition_name VARCHAR(100), description TEXT, example VARCHAR(200), example_meaning TEXT)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+        SELECT ct.condition_name, ct.description, ct.example, ct.example_meaning
+        FROM uma_condition_types ct
+        WHERE ct.condition_name = ANY(p_names);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_manifest_hash(p_key VARCHAR(100))
+RETURNS TABLE(hash_token VARCHAR(20))
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+        SELECT mh.hash_token
+        FROM uma_manifest_hashes mh
+        WHERE mh.manifest_key = p_key;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_uma_conditions_hash(p_skill_id INT)
+RETURNS TABLE(conditions_hash VARCHAR(64))
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+        SELECT s.conditions_hash
+        FROM uma_skills s
+        WHERE s.skill_id = p_skill_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_uma_effect_type_names(p_type_ids INT[])
+RETURNS TABLE(effect_type_id INT, display_name VARCHAR(100))
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+        SELECT et.effect_type_id, et.display_name
+        FROM uma_effect_types et
+        WHERE et.effect_type_id = ANY(p_type_ids);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_uma_skill_full(p_skill_id INT)
+RETURNS TABLE(
+    skill_id         INT,
+    name_en          VARCHAR(200),
+    rarity           INT,
+    available_in_en  BOOLEAN,
+    base_time_ms     INT,
+    last_llm_update  TIMESTAMPTZ,
+    gene_skill_id    INT,
+    gene_name_en     VARCHAR(200),
+    gene_base_time_ms INT,
+    character_names  TEXT
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+        SELECT
+            s.skill_id,
+            s.name_en,
+            s.rarity,
+            s.available_in_en,
+            s.base_time_ms,
+            s.last_llm_update,
+            g.skill_id,
+            g.name_en,
+            g.base_time_ms,
+            (
+                SELECT string_agg(
+                    c.name_en || ' [' ||
+                    COALESCE(initcap(replace(c.version, '_', ' ')), 'Original') || ']',
+                    ', ' ORDER BY c.name_en, c.version NULLS FIRST
+                )
+                FROM uma_skill_characters sc
+                JOIN uma_cards c ON c.card_id = sc.char_id
+                WHERE sc.skill_id = s.skill_id
+            )
+        FROM uma_skills s
+        LEFT JOIN uma_skills g ON g.parent_skill_id = s.skill_id
+        WHERE s.skill_id = p_skill_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_uma_skill_groups(p_skill_id INT)
+RETURNS TABLE(group_index INT, readable_precondition TEXT, readable_condition TEXT, readable_effects TEXT)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+        SELECT g.group_index, g.readable_precondition, g.readable_condition, g.readable_effects
+        FROM uma_skill_readable_groups g
+        WHERE g.skill_id = p_skill_id
+        ORDER BY g.group_index;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_uma_skill_parent_id(p_skill_id INT)
+RETURNS TABLE(parent_skill_id INT)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+        SELECT s.parent_skill_id
+        FROM uma_skills s
+        WHERE s.skill_id = p_skill_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_uma_skills_missing_descriptions()
+RETURNS TABLE(skill_id INT, condition_groups_json JSONB)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+        SELECT s.skill_id, s.condition_groups_json
+        FROM uma_skills s
+        WHERE s.conditions_hash IS DISTINCT FROM
+              encode(sha256(s.condition_groups_json::text::bytea), 'hex')
+        ORDER BY
+            s.available_in_en DESC,      -- EN skills first
+            s.parent_skill_id NULLS FIRST, -- parents before gene versions
+            s.skill_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION search_uma_skill(p_query TEXT, p_limit INT, p_threshold REAL)
+RETURNS TABLE(skill_id INT, parent_skill_id INT, name_en VARCHAR(200), rarity INT, available_in_en BOOLEAN, match_similarity REAL)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+        SELECT
+            s.skill_id,
+            s.parent_skill_id,
+            s.name_en,
+            s.rarity,
+            s.available_in_en,
+            similarity(s.name_en, p_query) AS sim
+        FROM uma_skills s
+        WHERE s.parent_skill_id IS NULL
+          AND similarity(s.name_en, p_query) >= p_threshold
+        ORDER BY sim DESC
+        LIMIT p_limit;
+END;
+$$;
+
+
 -- ============================================================
 -- PROCEDURES  (void operations — no result set returned)
 -- Called from C# as: CALL proc_name(@p1, @p2)
@@ -340,6 +595,314 @@ BEGIN
     WHERE pixiv_expand  = FALSE
       AND repost_check  = FALSE
       AND channel_id NOT IN (SELECT rcr.channel_id FROM rule_channel_relation rcr);
+END;
+$$;
+
+
+-- ---- Uma Musume ----
+
+CREATE OR REPLACE PROCEDURE delete_uma_skill_readable_groups(p_skill_id INT)
+LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM uma_skill_readable_groups WHERE skill_id = p_skill_id;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE insert_uma_condition_type(
+    p_name             VARCHAR(100),
+    p_description      TEXT,
+    p_example          VARCHAR(200),
+    p_example_meaning  TEXT
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO uma_condition_types (condition_name, description, example, example_meaning)
+    VALUES (p_name, p_description, p_example, p_example_meaning)
+    ON CONFLICT DO NOTHING;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE truncate_uma_condition_types()
+LANGUAGE plpgsql AS $$
+BEGIN
+    TRUNCATE uma_condition_types;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE update_skill_conditions_hash(p_skill_id INT)
+LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE uma_skills
+    SET conditions_hash = encode(sha256(condition_groups_json::text::bytea), 'hex'),
+        last_llm_update = now()
+    WHERE skill_id = p_skill_id;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE update_skill_readable_text(
+    p_skill_id             INT,
+    p_readable_conditions  TEXT,
+    p_readable_effects     TEXT
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE uma_skills
+    SET readable_conditions = p_readable_conditions,
+        readable_effects    = p_readable_effects,
+        last_llm_update     = NOW()
+    WHERE skill_id = p_skill_id;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE upsert_manifest_hash(p_key VARCHAR(100), p_hash VARCHAR(20))
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO uma_manifest_hashes (manifest_key, hash_token, last_checked, last_changed)
+    VALUES (p_key, p_hash, NOW(), NOW())
+    ON CONFLICT (manifest_key) DO UPDATE
+        SET last_checked = NOW(),
+            hash_token   = p_hash,
+            last_changed = CASE
+                               WHEN uma_manifest_hashes.hash_token <> EXCLUDED.hash_token
+                               THEN NOW()
+                               ELSE uma_manifest_hashes.last_changed
+                           END;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE upsert_uma_card(
+    p_card_id     INT,
+    p_char_id     INT,
+    p_name_en     VARCHAR(200),
+    p_version     VARCHAR(100),
+    p_title_en_gl VARCHAR(200)
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO uma_cards (card_id, char_id, name_en, version, title_en_gl)
+    VALUES (p_card_id, p_char_id, p_name_en, p_version, p_title_en_gl)
+    ON CONFLICT (card_id) DO UPDATE SET
+        char_id     = EXCLUDED.char_id,
+        name_en     = EXCLUDED.name_en,
+        version     = EXCLUDED.version,
+        title_en_gl = EXCLUDED.title_en_gl;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE upsert_uma_character(
+    p_char_id            INT,
+    p_name_en            VARCHAR(200),
+    p_name_jp            VARCHAR(200),
+    p_name_tw            VARCHAR(200),
+    p_url_name           VARCHAR(200),
+    p_height             INT,
+    p_birth_day          INT,
+    p_birth_month        INT,
+    p_birth_year         INT,
+    p_sex                INT,
+    p_bust               INT,
+    p_waist              INT,
+    p_hip                INT,
+    p_va_en              VARCHAR(200),
+    p_va_ja              VARCHAR(200),
+    p_va_link            VARCHAR(500),
+    p_playable           BOOLEAN,
+    p_playable_en        BOOLEAN,
+    p_active_en          BOOLEAN,
+    p_rl_active          VARCHAR(50),
+    p_rl_country         VARCHAR(10),
+    p_rl_death           VARCHAR(20),
+    p_rl_earnings        BIGINT,
+    p_rl_earnings_other  JSONB,
+    p_rl_races           INT,
+    p_rl_record          VARCHAR(20),
+    p_rl_wins            INT
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO uma_characters (
+        char_id, name_en, name_jp, name_tw, url_name,
+        height, birth_day, birth_month, birth_year, sex,
+        bust, waist, hip,
+        va_en, va_ja, va_link,
+        playable, playable_en, active_en,
+        rl_active, rl_country, rl_death, rl_earnings, rl_earnings_other,
+        rl_races, rl_record, rl_wins,
+        last_updated
+    )
+    VALUES (
+        p_char_id, p_name_en, p_name_jp, p_name_tw, p_url_name,
+        p_height, p_birth_day, p_birth_month, p_birth_year, p_sex,
+        p_bust, p_waist, p_hip,
+        p_va_en, p_va_ja, p_va_link,
+        p_playable, p_playable_en, p_active_en,
+        p_rl_active, p_rl_country, p_rl_death, p_rl_earnings, p_rl_earnings_other,
+        p_rl_races, p_rl_record, p_rl_wins,
+        NOW()
+    )
+    ON CONFLICT (char_id) DO UPDATE
+        SET name_en             = EXCLUDED.name_en,
+            name_jp             = EXCLUDED.name_jp,
+            name_tw             = EXCLUDED.name_tw,
+            url_name            = EXCLUDED.url_name,
+            height              = EXCLUDED.height,
+            birth_day           = EXCLUDED.birth_day,
+            birth_month         = EXCLUDED.birth_month,
+            birth_year          = EXCLUDED.birth_year,
+            sex                 = EXCLUDED.sex,
+            bust                = EXCLUDED.bust,
+            waist               = EXCLUDED.waist,
+            hip                 = EXCLUDED.hip,
+            va_en               = EXCLUDED.va_en,
+            va_ja               = EXCLUDED.va_ja,
+            va_link             = EXCLUDED.va_link,
+            playable            = EXCLUDED.playable,
+            playable_en         = EXCLUDED.playable_en,
+            active_en           = EXCLUDED.active_en,
+            rl_active           = EXCLUDED.rl_active,
+            rl_country          = EXCLUDED.rl_country,
+            rl_death            = EXCLUDED.rl_death,
+            rl_earnings         = EXCLUDED.rl_earnings,
+            rl_earnings_other   = EXCLUDED.rl_earnings_other,
+            rl_races            = EXCLUDED.rl_races,
+            rl_record           = EXCLUDED.rl_record,
+            rl_wins             = EXCLUDED.rl_wins,
+            last_updated        = NOW();
+END;
+$$;
+
+-- Three overloads of upsert_uma_skill are deployed on prod; captured here
+-- as-is rather than consolidated.
+CREATE OR REPLACE PROCEDURE upsert_uma_skill(
+    p_skill_id              INT,
+    p_parent_skill_id       INT,
+    p_name_en               VARCHAR(200),
+    p_name_jp               VARCHAR(200),
+    p_rarity                INT,
+    p_icon_id               INT,
+    p_available_in_en       BOOLEAN,
+    p_condition_groups_json JSONB,
+    p_base_time_ms          INT
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO uma_skills (
+        skill_id, parent_skill_id, name_en, name_jp, rarity, icon_id,
+        available_in_en, condition_groups_json, base_time_ms
+    )
+    VALUES (
+        p_skill_id, p_parent_skill_id, p_name_en, p_name_jp, p_rarity, p_icon_id,
+        p_available_in_en, p_condition_groups_json, p_base_time_ms
+    )
+    ON CONFLICT (skill_id) DO UPDATE SET
+        parent_skill_id       = EXCLUDED.parent_skill_id,
+        name_en               = EXCLUDED.name_en,
+        name_jp               = EXCLUDED.name_jp,
+        rarity                = EXCLUDED.rarity,
+        icon_id               = EXCLUDED.icon_id,
+        available_in_en       = EXCLUDED.available_in_en,
+        condition_groups_json = EXCLUDED.condition_groups_json,
+        base_time_ms          = EXCLUDED.base_time_ms;
+        -- NOTE: conditions_hash intentionally NOT updated here
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE upsert_uma_skill(
+    p_skill_id              INT,
+    p_parent_skill_id       INT,
+    p_name_en               VARCHAR(200),
+    p_name_jp               VARCHAR(200),
+    p_rarity                INT,
+    p_icon_id               INT,
+    p_available_in_en       BOOLEAN,
+    p_condition_groups_json JSONB,
+    p_conditions_hash       VARCHAR(64)
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO uma_skills (
+        skill_id, parent_skill_id, name_en, name_jp, rarity, icon_id,
+        available_in_en, condition_groups_json, conditions_hash, last_updated
+    )
+    VALUES (
+        p_skill_id, p_parent_skill_id, p_name_en, p_name_jp, p_rarity, p_icon_id,
+        p_available_in_en, p_condition_groups_json, p_conditions_hash, NOW()
+    )
+    ON CONFLICT (skill_id) DO UPDATE
+        SET name_en               = EXCLUDED.name_en,
+            name_jp               = EXCLUDED.name_jp,
+            rarity                = EXCLUDED.rarity,
+            icon_id               = EXCLUDED.icon_id,
+            available_in_en       = EXCLUDED.available_in_en,
+            condition_groups_json = EXCLUDED.condition_groups_json,
+            conditions_hash       = EXCLUDED.conditions_hash,
+            last_updated          = NOW();
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE upsert_uma_skill(
+    p_skill_id              INT,
+    p_parent_skill_id       INT,
+    p_name_en               VARCHAR(200),
+    p_name_jp               VARCHAR(200),
+    p_rarity                INT,
+    p_icon_id               INT,
+    p_available_in_en       BOOLEAN,
+    p_condition_groups_json JSONB,
+    p_conditions_hash       VARCHAR(64),
+    p_base_time_ms          INT
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO uma_skills (
+        skill_id, parent_skill_id, name_en, name_jp, rarity, icon_id,
+        available_in_en, condition_groups_json, conditions_hash, base_time_ms
+    )
+    VALUES (
+        p_skill_id, p_parent_skill_id, p_name_en, p_name_jp, p_rarity, p_icon_id,
+        p_available_in_en, p_condition_groups_json, p_conditions_hash, p_base_time_ms
+    )
+    ON CONFLICT (skill_id) DO UPDATE SET
+        parent_skill_id       = EXCLUDED.parent_skill_id,
+        name_en               = EXCLUDED.name_en,
+        name_jp               = EXCLUDED.name_jp,
+        rarity                = EXCLUDED.rarity,
+        icon_id               = EXCLUDED.icon_id,
+        available_in_en       = EXCLUDED.available_in_en,
+        condition_groups_json = EXCLUDED.condition_groups_json,
+        conditions_hash       = EXCLUDED.conditions_hash,
+        base_time_ms          = EXCLUDED.base_time_ms;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE upsert_uma_skill_characters(p_skill_id INT, p_char_ids INT[])
+LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM uma_skill_characters WHERE skill_id = p_skill_id;
+
+    INSERT INTO uma_skill_characters (skill_id, char_id)
+    SELECT p_skill_id, unnest(p_char_ids)
+    ON CONFLICT DO NOTHING;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE upsert_uma_skill_readable_group(
+    p_skill_id              INT,
+    p_group_index           INT,
+    p_readable_precondition TEXT,
+    p_readable_condition    TEXT,
+    p_readable_effects      TEXT
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO uma_skill_readable_groups
+        (skill_id, group_index, readable_precondition, readable_condition, readable_effects)
+    VALUES
+        (p_skill_id, p_group_index, p_readable_precondition, p_readable_condition, p_readable_effects)
+    ON CONFLICT (skill_id, group_index) DO UPDATE SET
+        readable_precondition = EXCLUDED.readable_precondition,
+        readable_condition    = EXCLUDED.readable_condition,
+        readable_effects      = EXCLUDED.readable_effects;
 END;
 $$;
 
