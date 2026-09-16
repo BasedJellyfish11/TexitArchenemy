@@ -222,7 +222,7 @@ public class CommandHandler
             return false;
 
         await SQLInteracter.UpdateUminekoProgress(context.User, context.Guild.Id, match.QuoteIndex, match.QuoteText);
-        await UminekoRoleSync.SyncRoles(context.Guild);
+        await UminekoRoleSync.SyncRoles(context.Client, context.Guild);
 
         EmbedBuilder embedBuilder = new()
         {

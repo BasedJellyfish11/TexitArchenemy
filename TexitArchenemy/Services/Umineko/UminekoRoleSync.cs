@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Discord;
+using Discord.Rest;
 using Discord.WebSocket;
 using TexitArchenemy.Services.Database;
 using TexitArchenemy.Services.Logger;
@@ -12,10 +13,10 @@ namespace TexitArchenemy.Services.Umineko;
 // Neither side counts until they've posted at least one screenshot (QuoteIndex != null).
 public static class UminekoRoleSync
 {
-    public static async Task SyncRoles(SocketGuild guild)
+    public static async Task SyncRoles(DiscordSocketClient client, SocketGuild guild)
     {
         List<UminekoProgressRecord> progress = await SQLInteracter.GetAllUminekoProgress(guild.Id);
-        Dictionary<ulong, IGuildUser?> users = new();
+        Dictionary<ulong, RestGuildUser?> users = new();
 
         foreach (UminekoProgressRecord a in progress)
         {
@@ -26,8 +27,10 @@ public static class UminekoRoleSync
 
                 bool shouldHaveAccess = a.QuoteIndex.HasValue && b.QuoteIndex.HasValue && a.QuoteIndex >= b.QuoteIndex;
 
-                if (!users.TryGetValue(a.UserId, out IGuildUser? userA))
-                    users[a.UserId] = userA = (IGuildUser?)guild.GetUser(a.UserId) ?? await ((IGuild)guild).GetUserAsync(a.UserId);
+                // ponytail: fetch over REST, not the gateway cache — the cache doesn't see our
+                // own role changes and was causing missed revokes.
+                if (!users.TryGetValue(a.UserId, out RestGuildUser? userA))
+                    users[a.UserId] = userA = await client.Rest.GetGuildUserAsync(guild.Id, a.UserId);
                 if (userA == null)
                     continue;
 
