@@ -22,7 +22,10 @@ dropped rather than left half-populated.
 1. `!uminekoregister` (`Commands/UminekoRegister.cs`) — run in the channel to
    gate. Creates a `umineko-<username>` role, grants it `ViewChannel` on that
    channel, assigns it to the caller, and inserts a `user_umineko_progress`
-   row with `quote_index = NULL` (no access granted to/from anyone yet).
+   row with `quote_index = NULL`. `UminekoRoleSync` treats a `NULL` index as
+   0 (the lowest possible position), so everyone else gets access to the new
+   channel right away, while the new member gets access to no one else's
+   until they actually post a screenshot.
 2. Member posts a screenshot in their registered channel.
    `CommandHandler.CheckUminekoProgressImage` (called from `CheckNonCommand`
    on every message) checks the message has image attachments and that the
@@ -50,8 +53,9 @@ dropped rather than left half-populated.
    commands. Hardcoded rather than reflected off `CommandService`/`[Summary]`
    at runtime (no DI wiring exists for modules to reach `CommandService`);
    keep it in sync by hand when commands change.
-5. `!uminekounregister` (`Commands/UminekoUnregister.cs`) deletes the role and
-   the progress row.
+5. `!uminekounregister` (`Commands/UminekoUnregister.cs`) reverts the channel
+   to public (removes the `@everyone` deny overwrite added at register),
+   deletes the role, and deletes the progress row.
 
 ## Key files
 

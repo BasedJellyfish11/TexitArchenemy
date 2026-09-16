@@ -34,6 +34,9 @@ public class UminekoUnregisterModule : ModuleBase<SocketCommandContext>
             return;
         }
 
+        if (Context.Guild.GetChannel(progress.ChannelId) is SocketGuildChannel registeredChannel)
+            await registeredChannel.RemovePermissionOverwriteAsync(Context.Guild.EveryoneRole);
+
         if (progress.RoleId is { } roleId)
         {
             IRole? role = Context.Guild.GetRole(roleId);

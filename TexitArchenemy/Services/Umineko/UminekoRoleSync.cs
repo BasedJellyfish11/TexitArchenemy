@@ -10,7 +10,9 @@ using TexitArchenemy.Services.Logger;
 namespace TexitArchenemy.Services.Umineko;
 
 // User A gets user B's channel-access role iff A.QuoteIndex >= B.QuoteIndex (ties included).
-// Neither side counts until they've posted at least one screenshot (QuoteIndex != null).
+// A user who hasn't posted a screenshot yet (QuoteIndex == null) counts as index 0 — the
+// lowest possible position — so everyone else immediately has access to their channel, and
+// they have access to no one else's until they actually post.
 public static class UminekoRoleSync
 {
     public static async Task SyncRoles(DiscordSocketClient client, SocketGuild guild)
@@ -25,7 +27,7 @@ public static class UminekoRoleSync
                 if (a.UserId == b.UserId || b.RoleId == null)
                     continue;
 
-                bool shouldHaveAccess = a.QuoteIndex.HasValue && b.QuoteIndex.HasValue && a.QuoteIndex >= b.QuoteIndex;
+                bool shouldHaveAccess = (a.QuoteIndex ?? 0) >= (b.QuoteIndex ?? 0);
 
                 // ponytail: fetch over REST, not the gateway cache — the cache doesn't see our
                 // own role changes and was causing missed revokes.
