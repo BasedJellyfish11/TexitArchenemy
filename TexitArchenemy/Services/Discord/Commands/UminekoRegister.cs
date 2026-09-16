@@ -8,12 +8,12 @@ using TexitArchenemy.Services.Logger;
 
 namespace TexitArchenemy.Services.Discord.Commands;
 
-public class RegisterUminekoModule : ModuleBase<SocketCommandContext>
+public class UminekoRegisterModule : ModuleBase<SocketCommandContext>
 {
-    [Command("registerumineko")]
+    [Command("uminekoregister")]
     [Summary("Registers the current channel as your Umineko progress channel and creates the role that grants access to it.")]
     [UsedImplicitly]
-    public async Task RegisterUmineko()
+    public async Task UminekoRegister()
     {
         EmbedBuilder embedBuilder;
         

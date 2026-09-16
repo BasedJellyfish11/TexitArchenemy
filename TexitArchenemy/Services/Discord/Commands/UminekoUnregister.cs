@@ -8,12 +8,12 @@ using TexitArchenemy.Services.Logger;
 
 namespace TexitArchenemy.Services.Discord.Commands;
 
-public class UnregisterUminekoModule : ModuleBase<SocketCommandContext>
+public class UminekoUnregisterModule : ModuleBase<SocketCommandContext>
 {
-    [Command("unregisterumineko")]
+    [Command("uminekounregister")]
     [Summary("Removes your Umineko progress tracking registration and deletes your access role.")]
     [UsedImplicitly]
-    public async Task UnregisterUmineko()
+    public async Task UminekoUnregister()
     {
         EmbedBuilder embedBuilder;
 

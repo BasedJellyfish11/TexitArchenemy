@@ -208,25 +208,31 @@ public class CommandHandler
             };
             await context.Channel.SendMessageAsync(embed: debugEmbedBuilder.Build(), messageReference: new MessageReference(context.Message.Id));
 
-            UminekoQuoteMatch? match = await SQLInteracter.SearchUminekoQuote(text, progress.QuoteIndex);
-            if (match == null)
-            {
+            bool matched = await ApplyUminekoQuoteMatch(context, progress, text);
+            if (!matched)
                 await ArchenemyLogger.Log($"No quote match ahead of index {progress.QuoteIndex} for attachment {attachment.Url} from {context.User}", "Discord");
-                continue;
-            }
-
-            await SQLInteracter.UpdateUminekoProgress(context.User, context.Guild.Id, match.QuoteIndex, match.QuoteText);
-            await UminekoRoleSync.SyncRoles(context.Guild);
-
-            EmbedBuilder embedBuilder = new()
-            {
-                Title = "Umineko progress updated",
-                Description = $"Quote #{match.QuoteIndex}\n> {match.QuoteText}"
-            };
-            embedBuilder.WithAuthor(context.User);
-            await context.Channel.SendMessageAsync(embed: embedBuilder.Build());
-            await ArchenemyLogger.Log($"Updated Umineko progress for {context.User} to index {match.QuoteIndex} in {context.Channel} (ID {context.Channel.Id})", "Discord");
         }
+    }
+
+    // Shared by the OCR intake above and !uminekoupdate (manual entry when OCR misreads).
+    public static async Task<bool> ApplyUminekoQuoteMatch(SocketCommandContext context, UminekoProgressRecord progress, string quoteText)
+    {
+        UminekoQuoteMatch? match = await SQLInteracter.SearchUminekoQuote(quoteText, progress.QuoteIndex);
+        if (match == null)
+            return false;
+
+        await SQLInteracter.UpdateUminekoProgress(context.User, context.Guild.Id, match.QuoteIndex, match.QuoteText);
+        await UminekoRoleSync.SyncRoles(context.Guild);
+
+        EmbedBuilder embedBuilder = new()
+        {
+            Title = "Umineko progress updated",
+            Description = $"Quote #{match.QuoteIndex}\n> {match.QuoteText}"
+        };
+        embedBuilder.WithAuthor(context.User);
+        await context.Channel.SendMessageAsync(embed: embedBuilder.Build());
+        await ArchenemyLogger.Log($"Updated Umineko progress for {context.User} to index {match.QuoteIndex} in {context.Channel} (ID {context.Channel.Id})", "Discord");
+        return true;
     }
 
         
