@@ -93,5 +93,9 @@ public record UminekoProgressRecord(
     ulong   ChannelId,
     ulong?  RoleId,
     int?    QuoteIndex,
-    short?  QuoteEpisode,
     string? QuotePlaintext);
+
+public record UminekoQuoteMatch(
+    int    QuoteIndex,
+    string QuoteText,
+    float  MatchSimilarity);
