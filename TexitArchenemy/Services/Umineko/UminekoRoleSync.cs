@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
 using TexitArchenemy.Services.Database;
+using TexitArchenemy.Services.Logger;
 
 namespace TexitArchenemy.Services.Umineko;
 
@@ -31,10 +32,25 @@ public static class UminekoRoleSync
                     continue;
 
                 bool hasAccess = userA.RoleIds.Contains(b.RoleId.Value);
-                if (shouldHaveAccess && !hasAccess)
+                if (shouldHaveAccess == hasAccess)
+                    continue;
+
+                string roleName = guild.GetRole(b.RoleId.Value)?.Name ?? $"role {b.RoleId}";
+
+                if (shouldHaveAccess)
+                {
                     await userA.AddRoleAsync(b.RoleId.Value);
-                else if (!shouldHaveAccess && hasAccess)
+                    await ArchenemyLogger.Log(
+                        $"Umineko role sync: granted {userA} (index {a.QuoteIndex}) '{roleName}' — gates {b.UserId}'s channel, {a.QuoteIndex} >= {b.QuoteIndex}",
+                        "Umineko");
+                }
+                else
+                {
                     await userA.RemoveRoleAsync(b.RoleId.Value);
+                    await ArchenemyLogger.Log(
+                        $"Umineko role sync: revoked {userA} (index {a.QuoteIndex}) '{roleName}' — gates {b.UserId}'s channel, {a.QuoteIndex} no longer >= {b.QuoteIndex}",
+                        "Umineko");
+                }
             }
         }
     }

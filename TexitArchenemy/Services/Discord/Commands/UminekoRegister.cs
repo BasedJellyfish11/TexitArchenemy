@@ -34,6 +34,7 @@ public class UminekoRegisterModule : ModuleBase<SocketCommandContext>
         }
 
         IRole role = await Context.Guild.CreateRoleAsync($"umineko-{Context.User.Username}", isMentionable: true);
+        await channel.AddPermissionOverwriteAsync(Context.Guild.EveryoneRole, new OverwritePermissions(viewChannel: PermValue.Deny));
         await channel.AddPermissionOverwriteAsync(role, new OverwritePermissions(viewChannel: PermValue.Allow));
         await guildUser.AddRoleAsync(role);
 
@@ -41,10 +42,10 @@ public class UminekoRegisterModule : ModuleBase<SocketCommandContext>
 
         embedBuilder = new EmbedBuilder
         {
-            Description = $"Registered! {role.Mention} now grants access to this channel, post your progress screenshots here to start updating it."
+            Description = $"Registered! This channel is now private, only {role.Mention} can see it. Post your progress screenshots here to start updating it."
         };
         embedBuilder.WithAuthor(Context.User);
         await ReplyAsync(embed: embedBuilder.Build());
-        await ArchenemyLogger.Log($"{Context.User} registered channel {channel} (ID {channel.Id}) for Umineko progress tracking with role {role.Id}", "Discord");
+        await ArchenemyLogger.Log($"{Context.User} registered channel {channel} (ID {channel.Id}) as private for Umineko progress tracking with role {role.Id}", "Discord");
     }
 }
