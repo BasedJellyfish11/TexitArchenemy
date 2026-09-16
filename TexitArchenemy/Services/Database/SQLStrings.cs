@@ -27,6 +27,12 @@ public static class ProcedureNames
     public const string insert_uma_condition_type            = nameof(insert_uma_condition_type);
     public const string get_uma_skill_parent_id              = nameof(get_uma_skill_parent_id);
     public const string get_uma_skills_missing_descriptions  = nameof(get_uma_skills_missing_descriptions);
+    public const string get_umineko_progress                 = nameof(get_umineko_progress);
+    public const string get_all_umineko_progress              = nameof(get_all_umineko_progress);
+    public const string register_umineko_user                = nameof(register_umineko_user);
+    public const string unregister_umineko_user               = nameof(unregister_umineko_user);
+    public const string update_umineko_progress               = nameof(update_umineko_progress);
+    public const string search_umineko_quote                  = nameof(search_umineko_quote);
 }
 
 #region TableColumns
@@ -78,6 +84,23 @@ public enum LinkTypes
     Artstation
 }
 
+public static class UminekoProgressColumns
+{
+    public const string user_id         = nameof(user_id);
+    public const string guild_id        = nameof(guild_id);
+    public const string channel_id      = nameof(channel_id);
+    public const string role_id         = nameof(role_id);
+    public const string quote_index     = nameof(quote_index);
+    public const string quote_plaintext = nameof(quote_plaintext);
+}
+
+public static class UminekoQuoteMatchColumns
+{
+    public const string quote_index      = nameof(quote_index);
+    public const string quote_text       = nameof(quote_text);
+    public const string match_similarity = nameof(match_similarity);
+}
+
 #endregion
 
 #region ProcedureParameters
@@ -117,6 +140,41 @@ public static class MarkAsRepostChannelParams
 {
     public const string channel_id = nameof(channel_id);
     public const string guild_id   = nameof(guild_id);
+}
+
+public static class GetUminekoProgressParams
+{
+    public const string user_id  = nameof(user_id);
+    public const string guild_id = nameof(guild_id);
+}
+
+public static class RegisterUminekoUserParams
+{
+    public const string user_id    = nameof(user_id);
+    public const string guild_id   = nameof(guild_id);
+    public const string channel_id = nameof(channel_id);
+    public const string role_id    = nameof(role_id);
+}
+
+public static class UnregisterUminekoUserParams
+{
+    public const string user_id  = nameof(user_id);
+    public const string guild_id = nameof(guild_id);
+}
+
+public static class UpdateUminekoProgressParams
+{
+    public const string user_id         = nameof(user_id);
+    public const string guild_id        = nameof(guild_id);
+    public const string quote_index     = nameof(quote_index);
+    public const string quote_plaintext = nameof(quote_plaintext);
+}
+
+public static class SearchUminekoQuoteParams
+{
+    public const string query     = nameof(query);
+    public const string min_index = nameof(min_index);
+    public const string threshold = nameof(threshold);
 }
 
 #endregion

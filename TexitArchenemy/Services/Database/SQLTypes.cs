@@ -86,3 +86,16 @@ public record ConditionTypeRecord(
 
 public record ConditionTypeEntry(
     string Name, string Desc, string Example, string ExampleMeaning);
+
+public record UminekoProgressRecord(
+    ulong   UserId,
+    ulong   GuildId,
+    ulong   ChannelId,
+    ulong?  RoleId,
+    int?    QuoteIndex,
+    string? QuotePlaintext);
+
+public record UminekoQuoteMatch(
+    int    QuoteIndex,
+    string QuoteText,
+    float  MatchSimilarity);
