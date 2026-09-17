@@ -33,6 +33,7 @@ public static class ProcedureNames
     public const string unregister_umineko_user               = nameof(unregister_umineko_user);
     public const string update_umineko_progress               = nameof(update_umineko_progress);
     public const string search_umineko_quote                  = nameof(search_umineko_quote);
+    public const string get_umineko_quote_count               = nameof(get_umineko_quote_count);
 }
 
 #region TableColumns
@@ -99,6 +100,11 @@ public static class UminekoQuoteMatchColumns
     public const string quote_index      = nameof(quote_index);
     public const string quote_text       = nameof(quote_text);
     public const string match_similarity = nameof(match_similarity);
+}
+
+public static class UminekoQuoteCountColumns
+{
+    public const string quote_count = nameof(quote_count);
 }
 
 #endregion

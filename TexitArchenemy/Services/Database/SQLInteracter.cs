@@ -246,6 +246,16 @@ public static class SQLInteracter
             (float)reader[UminekoQuoteMatchColumns.match_similarity]);
     }
 
+    public static async Task<int> GetUminekoQuoteCount()
+    {
+        await using NpgsqlConnection connection = new(CONNECTION_STRING);
+        await using NpgsqlDataReader reader =
+            await ExecuteReturnQueryFunction(ProcedureNames.get_umineko_quote_count, connection);
+
+        await reader.ReadAsync();
+        return (int)reader[UminekoQuoteCountColumns.quote_count];
+    }
+
     private static UminekoProgressRecord ReadUminekoProgressRecord(NpgsqlDataReader reader)
     {
         return new UminekoProgressRecord(

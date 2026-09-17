@@ -49,11 +49,14 @@ dropped rather than left half-populated.
    current index` floor, so it can't be used to fabricate backward progress,
    but a wrong-but-later-index paste can still misplace someone — no
    confirmation step).
-4. `!uminekohelp` (`Commands/UminekoHelp.cs`) — static embed listing these
+4. `!uminekocurrent` (`Commands/UminekoCurrent.cs`) — shows the caller's
+   current `quote_index`/`quote_plaintext` against `get_umineko_quote_count()`
+   (a `COUNT(*)` over `umineko_quotes_cache`). Read-only, no role sync.
+5. `!uminekohelp` (`Commands/UminekoHelp.cs`) — static embed listing these
    commands. Hardcoded rather than reflected off `CommandService`/`[Summary]`
    at runtime (no DI wiring exists for modules to reach `CommandService`);
    keep it in sync by hand when commands change.
-5. `!uminekounregister` (`Commands/UminekoUnregister.cs`) reverts the channel
+6. `!uminekounregister` (`Commands/UminekoUnregister.cs`) reverts the channel
    to public (removes the `@everyone` deny overwrite added at register),
    deletes the role, and deletes the progress row.
 

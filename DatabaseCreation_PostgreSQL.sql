@@ -693,6 +693,14 @@ LIMIT 1;
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION get_umineko_quote_count()
+RETURNS TABLE(quote_count INT)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY SELECT COUNT(*)::INT FROM umineko_quotes_cache;
+END;
+$$;
+
 CREATE OR REPLACE PROCEDURE delete_twitter_rule(p_tag INT, p_channel_id VARCHAR(20))
 LANGUAGE plpgsql AS $$
 BEGIN
