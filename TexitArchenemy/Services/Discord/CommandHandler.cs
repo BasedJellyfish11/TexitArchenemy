@@ -214,9 +214,22 @@ public class CommandHandler
         }
     }
 
+    // Normalizes OCR/typed quirks (curly quotes, ellipsis glyph, VN next-line/choice arrows)
+    // that would otherwise pollute the pg_trgm fuzzy match against the quote cache.
+    private static string NormalizeUminekoQuoteText(string text)
+    {
+        return text
+            .Replace('‘', '\'').Replace('’', '\'')
+            .Replace('“', '"').Replace('”', '"')
+            .Replace("…", "...")
+            .Replace("▷", "").Replace("▶", "").Replace("▽", "").Replace("▼", "")
+            .Trim();
+    }
+
     // Shared by the OCR intake above and !uminekoupdate (manual entry when OCR misreads).
     public static async Task<bool> ApplyUminekoQuoteMatch(SocketCommandContext context, UminekoProgressRecord progress, string quoteText)
     {
+        quoteText = NormalizeUminekoQuoteText(quoteText);
         UminekoQuoteMatch? match = await SQLInteracter.SearchUminekoQuote(quoteText, progress.QuoteIndex);
         if (match == null)
             return false;
