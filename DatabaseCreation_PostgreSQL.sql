@@ -46,8 +46,25 @@ CREATE TABLE discord_channels (
     channel_type_id INT         NOT NULL DEFAULT 1,
     repost_check    BOOLEAN     NOT NULL DEFAULT FALSE,
     pixiv_expand    BOOLEAN     NOT NULL DEFAULT FALSE,
-    umineko_channel BOOLEAN     NOT NULL DEFAULT FALSE,
     FOREIGN KEY (channel_type_id) REFERENCES channel_types(channel_type_id)
+);
+
+CREATE TABLE umineko_quotes_cache (
+    quote_index INT  PRIMARY KEY,
+    quote_text  TEXT NOT NULL,
+    synced_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX umineko_quotes_trgm_idx ON umineko_quotes_cache USING gin (quote_text gin_trgm_ops);
+
+CREATE TABLE user_umineko_progress
+(
+    user_id        VARCHAR(20) NOT NULL,
+    guild_id       VARCHAR(20) NOT NULL,
+    channel_id     VARCHAR(20) NOT NULL,
+    role_id        VARCHAR(20),
+    quote_index    INT,
+    quote_plaintext TEXT,
+    PRIMARY KEY (user_id, guild_id)
 );
 
 CREATE TABLE twitter_rules (
@@ -203,29 +220,6 @@ CREATE TABLE uma_manifest_hashes (
     last_changed TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ---- Umineko ----
-
--- Local copy of the public quote API's script text, keyed by its stable position
--- index. Kept locally because the remote /search endpoint only does exact
--- substring matching, which is useless against noisy OCR output — pg_trgm
--- similarity over this table is what actually does the fuzzy matching.
-CREATE TABLE umineko_quotes_cache (
-    quote_index INT  PRIMARY KEY,
-    quote_text  TEXT NOT NULL,
-    synced_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE INDEX umineko_quotes_trgm_idx ON umineko_quotes_cache USING gin (quote_text gin_trgm_ops);
-
--- Each opted-in user's furthest-read position in a shared channel.
-CREATE TABLE umineko_progress (
-    channel_id    VARCHAR(20) NOT NULL,
-    user_id       VARCHAR(20) NOT NULL,
-    textbox_index INT         NOT NULL,
-    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (channel_id, user_id),
-    FOREIGN KEY (channel_id) REFERENCES discord_channels(channel_id) ON DELETE CASCADE
-);
-
 
 -- ============================================================
 -- FUNCTIONS  (replacing T-SQL stored procedures)
@@ -324,6 +318,44 @@ BEGIN
             FROM discord_channels dc
             WHERE dc.channel_id = p_channel_id;
     END IF;
+END;
+$$;
+
+-- ---- Umineko progress ----
+
+CREATE OR REPLACE FUNCTION get_umineko_progress(p_user_id VARCHAR(20), p_guild_id VARCHAR(20))
+RETURNS TABLE(
+    user_id         VARCHAR(20),
+    guild_id        VARCHAR(20),
+    channel_id      VARCHAR(20),
+    role_id         VARCHAR(20),
+    quote_index     INT,
+    quote_plaintext TEXT
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+        SELECT u.user_id, u.guild_id, u.channel_id, u.role_id, u.quote_index, u.quote_plaintext
+        FROM user_umineko_progress u
+        WHERE u.user_id = p_user_id AND u.guild_id = p_guild_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_all_umineko_progress(p_guild_id VARCHAR(20))
+RETURNS TABLE(
+    user_id         VARCHAR(20),
+    guild_id        VARCHAR(20),
+    channel_id      VARCHAR(20),
+    role_id         VARCHAR(20),
+    quote_index     INT,
+    quote_plaintext TEXT
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+        SELECT u.user_id, u.guild_id, u.channel_id, u.role_id, u.quote_index, u.quote_plaintext
+        FROM user_umineko_progress u
+        WHERE u.guild_id = p_guild_id;
 END;
 $$;
 
@@ -580,73 +612,6 @@ BEGIN
 END;
 $$;
 
--- ---- Umineko ----
-
-CREATE OR REPLACE FUNCTION is_umineko_channel(p_channel_id VARCHAR(20))
-RETURNS TABLE(umineko_channel BOOLEAN)
-LANGUAGE plpgsql AS $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM discord_channels dc WHERE dc.channel_id = p_channel_id) THEN
-        RETURN QUERY SELECT FALSE;
-    ELSE
-        RETURN QUERY
-            SELECT dc.umineko_channel
-            FROM discord_channels dc
-            WHERE dc.channel_id = p_channel_id;
-    END IF;
-END;
-$$;
-
--- Every opted-in user's furthest progress in a shared channel, used to work out
--- who is currently tied for the lead.
-CREATE OR REPLACE FUNCTION get_umineko_channel_progress(p_channel_id VARCHAR(20))
-RETURNS TABLE(user_id VARCHAR(20), textbox_index INT)
-LANGUAGE plpgsql AS $$
-BEGIN
-    RETURN QUERY
-        SELECT up.user_id, up.textbox_index
-        FROM umineko_progress up
-        WHERE up.channel_id = p_channel_id;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION get_umineko_progress(p_channel_id VARCHAR(20), p_user_id VARCHAR(20))
-RETURNS TABLE(textbox_index INT)
-LANGUAGE plpgsql AS $$
-BEGIN
-    RETURN QUERY
-        SELECT up.textbox_index
-        FROM umineko_progress up
-        WHERE up.channel_id = p_channel_id AND up.user_id = p_user_id;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION get_umineko_quote_cache_count()
-RETURNS TABLE(quote_count BIGINT)
-LANGUAGE plpgsql AS $$
-BEGIN
-    RETURN QUERY SELECT COUNT(*) FROM umineko_quotes_cache;
-END;
-$$;
-
--- Fuzzy-matches noisy OCR text against the cached script. On an exact tie in
--- similarity (e.g. a short, repeated line), the later occurrence is preferred —
--- readers move forward, so it's the more likely real position.
-CREATE OR REPLACE FUNCTION search_umineko_quote(p_query TEXT, p_limit INT, p_threshold REAL)
-RETURNS TABLE(quote_index INT, match_similarity REAL)
-LANGUAGE plpgsql AS $$
-BEGIN
-    RETURN QUERY
-        SELECT
-            q.quote_index,
-            similarity(q.quote_text, p_query) AS sim
-        FROM umineko_quotes_cache q
-        WHERE similarity(q.quote_text, p_query) >= p_threshold
-        ORDER BY sim DESC, q.quote_index DESC
-        LIMIT p_limit;
-END;
-$$;
-
 
 -- ============================================================
 -- PROCEDURES  (void operations — no result set returned)
@@ -670,6 +635,72 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE PROCEDURE register_umineko_user(
+    p_user_id    VARCHAR(20),
+    p_guild_id   VARCHAR(20),
+    p_channel_id VARCHAR(20),
+    p_role_id    VARCHAR(20)
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO user_umineko_progress (user_id, guild_id, channel_id, role_id)
+    VALUES (p_user_id, p_guild_id, p_channel_id, p_role_id);
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE unregister_umineko_user(p_user_id VARCHAR(20), p_guild_id VARCHAR(20))
+LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM user_umineko_progress
+    WHERE user_id = p_user_id AND guild_id = p_guild_id;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE update_umineko_progress(
+    p_user_id         VARCHAR(20),
+    p_guild_id        VARCHAR(20),
+    p_quote_index     INT,
+    p_quote_plaintext TEXT
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE user_umineko_progress
+    SET quote_index = p_quote_index,
+        quote_plaintext = p_quote_plaintext
+    WHERE user_id = p_user_id AND guild_id = p_guild_id;
+END;
+$$;
+
+-- Fuzzy-matches noisy OCR text against the cached script, restricted to quotes
+-- past the reader's current position (p_min_index, nullable for a first-ever
+-- match) so OCR noise can't walk someone's progress backwards. On an exact tie
+-- in similarity (e.g. a short, repeated line), the later occurrence is
+-- preferred — readers move forward, so it's the more likely real position.
+CREATE OR REPLACE FUNCTION search_umineko_quote(p_query TEXT, p_min_index INT, p_threshold REAL)
+RETURNS TABLE(quote_index INT, quote_text TEXT, match_similarity REAL)
+LANGUAGE plpgsql AS $$
+BEGIN
+RETURN QUERY
+SELECT
+    q.quote_index,
+    q.quote_text,
+    similarity(q.quote_text, p_query) AS sim
+FROM umineko_quotes_cache q
+WHERE similarity(q.quote_text, p_query) >= p_threshold
+  AND (p_min_index IS NULL OR q.quote_index > p_min_index)
+ORDER BY sim DESC, q.quote_index DESC
+LIMIT 1;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_umineko_quote_count()
+RETURNS TABLE(quote_count INT)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY SELECT COUNT(*)::INT FROM umineko_quotes_cache;
+END;
+$$;
+
 CREATE OR REPLACE PROCEDURE delete_twitter_rule(p_tag INT, p_channel_id VARCHAR(20))
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -683,76 +714,9 @@ CREATE OR REPLACE PROCEDURE remove_useless_channels()
 LANGUAGE plpgsql AS $$
 BEGIN
     DELETE FROM discord_channels
-    WHERE pixiv_expand    = FALSE
-      AND repost_check    = FALSE
-      AND umineko_channel = FALSE
+    WHERE pixiv_expand  = FALSE
+      AND repost_check  = FALSE
       AND channel_id NOT IN (SELECT rcr.channel_id FROM rule_channel_relation rcr);
-END;
-$$;
-
-
--- ---- Umineko ----
-
-CREATE OR REPLACE PROCEDURE mark_umineko_channel(
-    p_channel_id VARCHAR(20),
-    p_guild_id   VARCHAR(20)
-)
-LANGUAGE plpgsql AS $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM discord_channels dc WHERE dc.channel_id = p_channel_id) THEN
-        INSERT INTO discord_channels (channel_id, channel_type_id, guild_id, umineko_channel)
-        VALUES (p_channel_id, 1, p_guild_id, TRUE);
-    ELSE
-        UPDATE discord_channels
-        SET umineko_channel = TRUE
-        WHERE channel_id = p_channel_id;
-    END IF;
-END;
-$$;
-
-CREATE OR REPLACE PROCEDURE unmark_umineko_channel(p_channel_id VARCHAR(20))
-LANGUAGE plpgsql AS $$
-BEGIN
-    UPDATE discord_channels
-    SET umineko_channel = FALSE
-    WHERE channel_id = p_channel_id;
-END;
-$$;
-
--- Progress only ever moves forward: a re-matched screenshot of an earlier
--- textbox (misread OCR, re-reading a scene, ...) must not regress it.
-CREATE OR REPLACE PROCEDURE upsert_umineko_progress(
-    p_channel_id    VARCHAR(20),
-    p_user_id       VARCHAR(20),
-    p_textbox_index INT
-)
-LANGUAGE plpgsql AS $$
-BEGIN
-    INSERT INTO umineko_progress (channel_id, user_id, textbox_index)
-    VALUES (p_channel_id, p_user_id, p_textbox_index)
-    ON CONFLICT (channel_id, user_id) DO UPDATE
-        SET textbox_index = GREATEST(umineko_progress.textbox_index, EXCLUDED.textbox_index),
-            updated_at    = NOW();
-END;
-$$;
-
-CREATE OR REPLACE PROCEDURE delete_umineko_progress(p_channel_id VARCHAR(20), p_user_id VARCHAR(20))
-LANGUAGE plpgsql AS $$
-BEGIN
-    DELETE FROM umineko_progress
-    WHERE channel_id = p_channel_id AND user_id = p_user_id;
-END;
-$$;
-
--- Bulk upsert used by the one-off local cache sync (~66k rows fetched in pages).
-CREATE OR REPLACE PROCEDURE bulk_upsert_umineko_quotes(p_indices INT[], p_texts TEXT[])
-LANGUAGE plpgsql AS $$
-BEGIN
-    INSERT INTO umineko_quotes_cache (quote_index, quote_text)
-    SELECT * FROM unnest(p_indices, p_texts)
-    ON CONFLICT (quote_index) DO UPDATE
-        SET quote_text = EXCLUDED.quote_text,
-            synced_at  = NOW();
 END;
 $$;
 
@@ -1086,22 +1050,6 @@ $$;
 CREATE TRIGGER repost_cleanup
 AFTER UPDATE ON discord_channels
 FOR EACH ROW EXECUTE FUNCTION fn_repost_cleanup();
-
-
--- Clears tracked progress when a channel is unmarked as a shared Umineko channel.
-CREATE OR REPLACE FUNCTION fn_umineko_cleanup() RETURNS TRIGGER LANGUAGE plpgsql AS $$
-BEGIN
-    -- Only act when umineko_channel transitions from TRUE to FALSE
-    IF OLD.umineko_channel = TRUE AND NEW.umineko_channel = FALSE THEN
-        DELETE FROM umineko_progress WHERE channel_id = NEW.channel_id;
-    END IF;
-    RETURN NULL;
-END;
-$$;
-
-CREATE TRIGGER umineko_cleanup
-AFTER UPDATE ON discord_channels
-FOR EACH ROW EXECUTE FUNCTION fn_umineko_cleanup();
 
 
 -- Removes channels that are no longer useful after an update.

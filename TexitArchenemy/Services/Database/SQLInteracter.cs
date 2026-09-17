@@ -150,6 +150,123 @@ public static class SQLInteracter
         await ExecuteVoidProcedure(ProcedureNames.mark_as_repost_channel, parameters);
     }
 
+    // ---- Umineko progress ----
+
+    public static async Task<UminekoProgressRecord?> GetUminekoProgress(SocketUser user, ulong guildId)
+    {
+        await using NpgsqlConnection connection = new(CONNECTION_STRING);
+
+        NpgsqlParameter[] parameters =
+        {
+            new($"@{GetUminekoProgressParams.user_id}", NpgsqlDbType.Varchar) { Value = user.Id.ToString() },
+            new($"@{GetUminekoProgressParams.guild_id}", NpgsqlDbType.Varchar) { Value = guildId.ToString() }
+        };
+
+        await using NpgsqlDataReader reader =
+            await ExecuteReturnQueryFunction(ProcedureNames.get_umineko_progress, connection, parameters);
+
+        if (!await reader.ReadAsync()) return null;
+        return ReadUminekoProgressRecord(reader);
+    }
+
+    public static async Task<List<UminekoProgressRecord>> GetAllUminekoProgress(ulong guildId)
+    {
+        await using NpgsqlConnection connection = new(CONNECTION_STRING);
+
+        NpgsqlParameter[] parameters =
+        {
+            new($"@{GetUminekoProgressParams.guild_id}", NpgsqlDbType.Varchar) { Value = guildId.ToString() }
+        };
+
+        await using NpgsqlDataReader reader =
+            await ExecuteReturnQueryFunction(ProcedureNames.get_all_umineko_progress, connection, parameters);
+
+        var results = new List<UminekoProgressRecord>();
+        while (await reader.ReadAsync())
+            results.Add(ReadUminekoProgressRecord(reader));
+        return results;
+    }
+
+    public static async Task RegisterUminekoUser(SocketUser user, ulong guildId, ulong channelId, ulong roleId)
+    {
+        NpgsqlParameter[] parameters =
+        {
+            new($"@{RegisterUminekoUserParams.user_id}", NpgsqlDbType.Varchar) { Value = user.Id.ToString() },
+            new($"@{RegisterUminekoUserParams.guild_id}", NpgsqlDbType.Varchar) { Value = guildId.ToString() },
+            new($"@{RegisterUminekoUserParams.channel_id}", NpgsqlDbType.Varchar) { Value = channelId.ToString() },
+            new($"@{RegisterUminekoUserParams.role_id}", NpgsqlDbType.Varchar) { Value = roleId.ToString() }
+        };
+        await ExecuteVoidProcedure(ProcedureNames.register_umineko_user, parameters);
+    }
+
+    public static async Task UnregisterUminekoUser(SocketUser user, ulong guildId)
+    {
+        NpgsqlParameter[] parameters =
+        {
+            new($"@{UnregisterUminekoUserParams.user_id}", NpgsqlDbType.Varchar) { Value = user.Id.ToString() },
+            new($"@{UnregisterUminekoUserParams.guild_id}", NpgsqlDbType.Varchar) { Value = guildId.ToString() }
+        };
+        await ExecuteVoidProcedure(ProcedureNames.unregister_umineko_user, parameters);
+    }
+
+    public static async Task UpdateUminekoProgress(
+        SocketUser user, ulong guildId, int quoteIndex, string quotePlaintext)
+    {
+        NpgsqlParameter[] parameters =
+        {
+            new($"@{UpdateUminekoProgressParams.user_id}", NpgsqlDbType.Varchar) { Value = user.Id.ToString() },
+            new($"@{UpdateUminekoProgressParams.guild_id}", NpgsqlDbType.Varchar) { Value = guildId.ToString() },
+            new($"@{UpdateUminekoProgressParams.quote_index}", NpgsqlDbType.Integer) { Value = quoteIndex },
+            new($"@{UpdateUminekoProgressParams.quote_plaintext}", NpgsqlDbType.Text) { Value = quotePlaintext }
+        };
+        await ExecuteVoidProcedure(ProcedureNames.update_umineko_progress, parameters);
+    }
+
+    // Only returns a match past minIndex (null = no floor, i.e. a first-ever match) so OCR
+    // noise can't walk someone's progress backwards.
+    public static async Task<UminekoQuoteMatch?> SearchUminekoQuote(
+        string query, int? minIndex, float threshold = 0.4f)
+    {
+        await using NpgsqlConnection connection = new(CONNECTION_STRING);
+
+        NpgsqlParameter[] parameters =
+        {
+            new($"@{SearchUminekoQuoteParams.query}", NpgsqlDbType.Text) { Value = query },
+            new($"@{SearchUminekoQuoteParams.min_index}", NpgsqlDbType.Integer) { Value = (object?)minIndex ?? DBNull.Value },
+            new($"@{SearchUminekoQuoteParams.threshold}", NpgsqlDbType.Real) { Value = threshold }
+        };
+
+        await using NpgsqlDataReader reader =
+            await ExecuteReturnQueryFunction(ProcedureNames.search_umineko_quote, connection, parameters);
+
+        if (!await reader.ReadAsync()) return null;
+        return new UminekoQuoteMatch(
+            (int)reader[UminekoQuoteMatchColumns.quote_index],
+            (string)reader[UminekoQuoteMatchColumns.quote_text],
+            (float)reader[UminekoQuoteMatchColumns.match_similarity]);
+    }
+
+    public static async Task<int> GetUminekoQuoteCount()
+    {
+        await using NpgsqlConnection connection = new(CONNECTION_STRING);
+        await using NpgsqlDataReader reader =
+            await ExecuteReturnQueryFunction(ProcedureNames.get_umineko_quote_count, connection);
+
+        await reader.ReadAsync();
+        return (int)reader[UminekoQuoteCountColumns.quote_count];
+    }
+
+    private static UminekoProgressRecord ReadUminekoProgressRecord(NpgsqlDataReader reader)
+    {
+        return new UminekoProgressRecord(
+            ulong.Parse((string)reader[UminekoProgressColumns.user_id]),
+            ulong.Parse((string)reader[UminekoProgressColumns.guild_id]),
+            ulong.Parse((string)reader[UminekoProgressColumns.channel_id]),
+            reader[UminekoProgressColumns.role_id] is string roleId ? ulong.Parse(roleId) : null,
+            reader[UminekoProgressColumns.quote_index] as int?,
+            reader[UminekoProgressColumns.quote_plaintext] as string);
+    }
+
     // ---- Manifest hashes ----
 
     public static async Task<string?> GetUmaManifestHash(string key)

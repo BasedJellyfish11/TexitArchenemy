@@ -11,6 +11,8 @@ using Discord.WebSocket;
 using JetBrains.Annotations;
 using TexitArchenemy.Services.Database;
 using TexitArchenemy.Services.Logger;
+using TexitArchenemy.Services.Ocr;
+using TexitArchenemy.Services.Umineko;
 
 namespace TexitArchenemy.Services.Discord;
 
@@ -130,6 +132,8 @@ public class CommandHandler
     private async Task CheckNonCommand(SocketCommandContext context)
     {
         // await ArchenemyLogger.Log($"Handling message {context.Message} from channel {context.Channel}", "Discord");
+        await CheckUminekoProgressImage(context);
+
         string? message = context.Message.Content?.ToLower();
         if(message == null)
             return;
@@ -165,7 +169,83 @@ public class CommandHandler
 
         if (await SQLInteracter.IsRepostChannel(context.Channel.Id))
             await EnsureNotRepost(message, context);
-            
+
+    }
+
+    private static async Task CheckUminekoProgressImage(SocketCommandContext context)
+    {
+        if (context.Guild == null || context.Message.Author.IsBot)
+            return;
+
+        List<Attachment> imageAttachments = context.Message.Attachments
+            .Where(a => a.ContentType != null && a.ContentType.StartsWith("image/"))
+            .ToList();
+        if (imageAttachments.Count == 0)
+            return;
+
+        UminekoProgressRecord? progress = await SQLInteracter.GetUminekoProgress(context.User, context.Guild.Id);
+        if (progress == null || progress.ChannelId != context.Channel.Id)
+            return;
+
+        foreach (Attachment attachment in imageAttachments)
+        {
+            string text;
+            try
+            {
+                byte[] imageBytes = await client.GetByteArrayAsync(attachment.Url);
+                text = await TesseractOcrService.ReadTextAsync(imageBytes);
+            }
+            catch (Exception e)
+            {
+                await ArchenemyLogger.Log($"Failed to OCR attachment {attachment.Url} from {context.User}: {e}", "Discord");
+                continue;
+            }
+
+            EmbedBuilder debugEmbedBuilder = new()
+            {
+                Title = "OCR debug",
+                Description = string.IsNullOrWhiteSpace(text) ? "*(empty)*" : text
+            };
+            await context.Channel.SendMessageAsync(embed: debugEmbedBuilder.Build(), messageReference: new MessageReference(context.Message.Id));
+
+            bool matched = await ApplyUminekoQuoteMatch(context, progress, text);
+            if (!matched)
+                await ArchenemyLogger.Log($"No quote match ahead of index {progress.QuoteIndex} for attachment {attachment.Url} from {context.User}", "Discord");
+        }
+    }
+
+    // Normalizes OCR/typed quirks (curly quotes, ellipsis glyph, VN next-line/choice arrows)
+    // that would otherwise pollute the pg_trgm fuzzy match against the quote cache.
+    private static string NormalizeUminekoQuoteText(string text)
+    {
+        return text
+            .Replace('‘', '\'').Replace('’', '\'')
+            .Replace('“', '"').Replace('”', '"')
+            .Replace("…", "...")
+            .Replace("▷", "").Replace("▶", "").Replace("▽", "").Replace("▼", "")
+            .Trim();
+    }
+
+    // Shared by the OCR intake above and !uminekoupdate (manual entry when OCR misreads).
+    public static async Task<bool> ApplyUminekoQuoteMatch(SocketCommandContext context, UminekoProgressRecord progress, string quoteText)
+    {
+        quoteText = NormalizeUminekoQuoteText(quoteText);
+        UminekoQuoteMatch? match = await SQLInteracter.SearchUminekoQuote(quoteText, progress.QuoteIndex);
+        if (match == null)
+            return false;
+
+        await SQLInteracter.UpdateUminekoProgress(context.User, context.Guild.Id, match.QuoteIndex, match.QuoteText);
+        await UminekoRoleSync.SyncRoles(context.Client, context.Guild);
+
+        EmbedBuilder embedBuilder = new()
+        {
+            Title = "Umineko progress updated",
+            Description = $"Quote #{match.QuoteIndex}\n> {match.QuoteText}"
+        };
+        embedBuilder.WithAuthor(context.User);
+        await context.Channel.SendMessageAsync(embed: embedBuilder.Build());
+        await ArchenemyLogger.Log($"Updated Umineko progress for {context.User} to index {match.QuoteIndex} in {context.Channel} (ID {context.Channel.Id})", "Discord");
+        return true;
     }
 
         
