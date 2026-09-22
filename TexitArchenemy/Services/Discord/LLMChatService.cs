@@ -16,9 +16,10 @@ public static class LLMChatService
 {
     private const string API_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
 
-    // Models to try in order. Both handle text, images and video. NVIDIA's shared endpoint
-    // marks models as DEGRADED from time to time, so a fallback keeps the command alive.
-    private static readonly string[] Models = ["minimaxai/minimax-m3", "qwen/qwen3.5-397b-a17b"];
+    // Models to try in order; both accept text and image input, so !ask stays multimodal.
+    // NVIDIA's shared endpoint marks models DEGRADED or retires them (410 Gone) over time,
+    // so the fallback keeps the command alive.
+    private static readonly string[] Models = ["google/gemma-4-31b-it", "deepseek-ai/deepseek-v4.1-flash"];
 
     private const int MAX_REQUESTS_PER_MINUTE = 15;
     private const int MAX_CONVERSATION_MESSAGES = 30;
