@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
@@ -27,6 +28,9 @@ public static class LLMChatService
     private const int MAX_CONVERSATION_MESSAGES = 30;
     private const int DISCORD_MESSAGE_LIMIT = 2000;
     private const int PER_MODEL_TIMEOUT_SECONDS = 60;
+    private const double EDIT_INTERVAL_SECONDS = 1.25;   // Discord allows ~5 message edits / 5s per channel
+    private const int MAX_SOURCES_SHOWN = 4;
+    private const string THINKING_PLACEHOLDER = "💭 Thinking…";
 
     private const string SYSTEM_PROMPT = """
                                          ## Core Principles
@@ -141,7 +145,7 @@ public static class LLMChatService
         return false;
     }
 
-    // MiniMax-M3 is multimodal: text-only messages use a plain string content, while messages
+    // The models are multimodal: text-only messages use a plain string content, while messages
     // with attachments use a list of typed parts (text + image_url/video_url).
     private static object BuildUserMessage(string text, IEnumerable<IAttachment> attachments)
     {
@@ -175,37 +179,71 @@ public static class LLMChatService
             return;
         }
 
+        // Post a placeholder straight away, then stream the answer into it by editing. Replying also
+        // links this message into the reply chain, which is what lets users continue the conversation
+        // by replying back to it.
+        IUserMessage reply = await userMessage.ReplyAsync(THINKING_PLACEHOLDER);
         try
         {
-            // The NVIDIA endpoint regularly takes 10-40 seconds, so show a typing
-            // indicator while the user waits
-            string? answer;
-            using (userMessage.Channel.EnterTypingState())
-                answer = await QueryModel(conversation);
-            if (string.IsNullOrWhiteSpace(answer))
-            {
-                await userMessage.ReplyAsync("None of the LLMs answered, try again later.");
-                return;
-            }
-
-            // Answering as a reply links this message into the reply chain, which is what
-            // lets users continue the conversation by replying back to it
-            await userMessage.ReplyAsync(Truncate(answer, DISCORD_MESSAGE_LIMIT));
+            string? answer = await StreamAnswer(conversation, reply);
+            await Finalize(reply, answer);
         }
         catch (Exception e)
         {
             await ArchenemyLogger.Log($"LLM request failed: {e}", "Discord");
-            await userMessage.ReplyAsync("The LLM request failed, try again later.");
+            await SafeEdit(reply, "The LLM request failed, try again later.");
         }
     }
 
-    private static async Task<string?> QueryModel(List<object> conversation)
+    // Puts the finished answer on screen: the first chunk replaces the placeholder, any overflow
+    // past Discord's 2000-char limit follows as extra messages.
+    private static async Task Finalize(IUserMessage reply, string? answer)
+    {
+        if (string.IsNullOrWhiteSpace(answer))
+        {
+            await SafeEdit(reply, "None of the LLMs answered, try again later.");
+            return;
+        }
+
+        IReadOnlyList<string> chunks = SplitForDiscord(answer);
+        await SafeEdit(reply, chunks[0]);
+        for (int i = 1; i < chunks.Count; i++)
+            await reply.Channel.SendMessageAsync(chunks[i], messageReference: new MessageReference(reply.Id));
+    }
+
+    // A failed edit (message deleted, transient rate limit) must not abort the stream, so swallow
+    // and log it.
+    private static async Task SafeEdit(IUserMessage message, string content)
+    {
+        try
+        {
+            await message.ModifyAsync(m => m.Content = content);
+        }
+        catch (Exception e)
+        {
+            await ArchenemyLogger.Log($"Discord edit failed: {e.Message}", "Discord");
+        }
+    }
+
+    private static IReadOnlyList<string> SplitForDiscord(string text)
+    {
+        if (text.Length <= DISCORD_MESSAGE_LIMIT)
+            return [text];
+
+        List<string> chunks = [];
+        for (int start = 0; start < text.Length; start += DISCORD_MESSAGE_LIMIT)
+            chunks.Add(text.Substring(start, Math.Min(DISCORD_MESSAGE_LIMIT, text.Length - start)));
+
+        return chunks;
+    }
+
+    private static async Task<string?> StreamAnswer(List<object> conversation, IUserMessage reply)
     {
         List<object> messages = [new { role = "system", content = SYSTEM_PROMPT }, .. conversation];
 
         foreach (string model in Models)
         {
-            string? answer = await TryQueryModel(model, messages);
+            string? answer = await TryStreamModel(model, messages, reply);
             if (!string.IsNullOrWhiteSpace(answer))
                 return answer;
         }
@@ -213,36 +251,28 @@ public static class LLMChatService
         return null;
     }
 
-    private static async Task<string?> TryQueryModel(string model, List<object> messages)
+    private static async Task<string?> TryStreamModel(string model, List<object> messages, IUserMessage reply)
     {
-        var request = new
-        {
-            model,
-            messages,
-            max_tokens = 8192,
-            temperature = 1.00,
-            top_p = 0.95,
-            stream = false
-        };
-
-        string requestJson = JsonSerializer.Serialize(request);
         await ArchenemyLogger.Log($"Asking {model}", "Discord");
+        await SafeEdit(reply, THINKING_PLACEHOLDER);   // reset in case a previous model streamed partial text
 
-        // Cap each model so a hung or slow one fails over to the next instead of stalling the
-        // whole command. Any failure (timeout, network error, bad JSON) returns null so the
-        // caller moves on down the chain rather than throwing out of it.
+        // Cap each model so a hung or slow one fails over to the next instead of stalling the whole
+        // command. Any failure (timeout, network error, bad JSON) returns null so the chain moves on
+        // rather than throwing out of it.
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(PER_MODEL_TIMEOUT_SECONDS));
         try
         {
-            StringContent body = new(requestJson, Encoding.UTF8, "application/json");
-            HttpResponseMessage response = await Client.PostAsync(API_URL, body, timeout.Token);
-            string responseBody = await response.Content.ReadAsStringAsync(timeout.Token);
-            await ArchenemyLogger.Log($"LLM response: {responseBody}", "Discord");
+            using HttpRequestMessage request = new(HttpMethod.Post, API_URL)
+            {
+                Content = new StringContent(BuildRequestJson(model, messages), Encoding.UTF8, "application/json")
+            };
+            using HttpResponseMessage response =
+                await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
 
             if (!response.IsSuccessStatusCode)
                 return null;
 
-            return ExtractAnswer(responseBody);
+            return await ConsumeStream(response, reply, timeout.Token);
         }
         catch (Exception e)
         {
@@ -251,29 +281,122 @@ public static class LLMChatService
         }
     }
 
-    private static string? ExtractAnswer(string responseBody)
+    // Reads the server-sent-event stream, editing the Discord message as it goes: a "thinking" or
+    // "searching" status while the model reasons and runs web searches, then the answer itself once
+    // its text starts arriving. Returns the finished answer with a compact source list appended.
+    private static async Task<string?> ConsumeStream(HttpResponseMessage response, IUserMessage reply, CancellationToken token)
     {
-        using JsonDocument document = JsonDocument.Parse(responseBody);
+        await using Stream stream = await response.Content.ReadAsStreamAsync(token);
+        using StreamReader reader = new(stream);
 
-        // The API returns 200 with empty choices when it can't process an attachment
-        JsonElement choices = document.RootElement.GetProperty("choices");
-        if (choices.GetArrayLength() == 0)
-            return null;
+        StringBuilder content = new();
+        List<string> sources = [];
+        bool searching = false;
+        string shown = THINKING_PLACEHOLDER;
+        DateTime lastEdit = DateTime.MinValue;
 
-        string? content = choices[0]
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString();
+        while (await reader.ReadLineAsync(token) is { } line)
+        {
+            if (!line.StartsWith("data:", StringComparison.Ordinal))
+                continue;
 
-        if (content == null)
-            return null;
+            string payload = line[5..].Trim();
+            if (payload is "[DONE]")
+                break;
 
-        // Reasoning models can prepend their thinking in a <think> block; only keep the answer
+            AccumulateDelta(payload, content, sources, ref searching);
+
+            // The answer text arrives only at the very end (after a long reasoning + search phase),
+            // so show a live status until it does, then switch to the answer as it streams in.
+            string view = content.Length > 0 ? content.ToString() : StatusLine(searching, sources.Count);
+            if (view == shown || DateTime.UtcNow - lastEdit < TimeSpan.FromSeconds(EDIT_INTERVAL_SECONDS))
+                continue;
+
+            await SafeEdit(reply, Truncate(view, DISCORD_MESSAGE_LIMIT));
+            shown = view;
+            lastEdit = DateTime.UtcNow;
+        }
+
+        string answer = StripThink(content.ToString()).Trim();
+        return answer.Length == 0 ? null : AppendSources(answer, sources);
+    }
+
+    // Applies one SSE chunk: appends any answer text and collects web-search citation URLs.
+    private static void AccumulateDelta(string payload, StringBuilder content, List<string> sources, ref bool searching)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(payload);
+            JsonElement choices = document.RootElement.GetProperty("choices");
+            if (choices.GetArrayLength() == 0 || !choices[0].TryGetProperty("delta", out JsonElement delta))
+                return;
+
+            if (delta.TryGetProperty("content", out JsonElement text) && text.ValueKind == JsonValueKind.String)
+                content.Append(text.GetString());
+
+            if (!delta.TryGetProperty("annotations", out JsonElement annotations) || annotations.ValueKind != JsonValueKind.Array)
+                return;
+
+            searching = true;
+            foreach (JsonElement annotation in annotations.EnumerateArray())
+            {
+                if (annotation.TryGetProperty("url_citation", out JsonElement citation)
+                    && citation.TryGetProperty("url", out JsonElement url)
+                    && url.GetString() is { } link && !sources.Contains(link))
+                    sources.Add(link);
+            }
+        }
+        catch (JsonException)
+        {
+            // Keep-alive comments and partial chunks aren't valid JSON; skip them.
+        }
+    }
+
+    private static string StatusLine(bool searching, int sourceCount) =>
+        searching
+            ? $"🔍 Searching the web… ({sourceCount} source{(sourceCount == 1 ? "" : "s")} so far)"
+            : THINKING_PLACEHOLDER;
+
+    private static string AppendSources(string answer, List<string> sources)
+    {
+        if (sources.Count == 0)
+            return answer;
+
+        string links = string.Join(" · ", sources.Take(MAX_SOURCES_SHOWN).Select(FormatSourceLink));
+        return $"{answer}\n-# 🔎 {links}";
+    }
+
+    // Shows the source as its host name, linked, with the URL in angle brackets so Discord doesn't
+    // expand a preview embed for every citation.
+    private static string FormatSourceLink(string url)
+    {
+        string host = Uri.TryCreate(url, UriKind.Absolute, out Uri? parsed)
+            ? parsed.Host.Replace("www.", "")
+            : url;
+        return $"[{host}](<{url}>)";
+    }
+
+    private static string BuildRequestJson(string model, List<object> messages) =>
+        JsonSerializer.Serialize(new
+        {
+            model,
+            messages,
+            max_tokens = 8192,
+            temperature = 1.00,
+            top_p = 0.95,
+            stream = true,
+            // Let the model decide when to search; Parallel's turbo tier is the cheapest at $0.001/search.
+            tools = new object[]
+            {
+                new { type = "openrouter:web_search", parameters = new { engine = "parallel", mode = "turbo" } }
+            }
+        });
+
+    // Reasoning models can prepend their thinking in a <think> block; only keep the answer after it.
+    private static string StripThink(string content)
+    {
         int thinkEnd = content.IndexOf("</think>", StringComparison.OrdinalIgnoreCase);
-        if (thinkEnd >= 0)
-            content = content[(thinkEnd + "</think>".Length)..];
-
-        return content.Trim();
+        return thinkEnd >= 0 ? content[(thinkEnd + "</think>".Length)..] : content;
     }
 
     private static bool TryReserveRateLimitSlot()
