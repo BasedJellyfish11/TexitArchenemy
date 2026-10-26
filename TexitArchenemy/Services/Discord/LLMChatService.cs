@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Discord;
 using Discord.Commands;
@@ -14,16 +15,18 @@ namespace TexitArchenemy.Services.Discord;
 
 public static class LLMChatService
 {
-    private const string API_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
+    private const string API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-    // Models to try in order; both accept text and image input, so !ask stays multimodal.
-    // NVIDIA's shared endpoint marks models DEGRADED or retires them (410 Gone) over time,
-    // so the fallback keeps the command alive.
-    private static readonly string[] Models = ["google/gemma-4-31b-it", "deepseek-ai/deepseek-v4.1-flash"];
+    // Models tried in order until one answers. All accept text + image input, so !ask stays
+    // multimodal. OpenRouter already fails over across upstream providers, but a model can still
+    // be down or slow, so we keep a cheap chain plus a short per-model timeout to move on quickly.
+    private static readonly string[] Models =
+        ["z-ai/glm-5.3-flash", "qwen/qwen3.7-flash", "deepseek/deepseek-v4.1-flash"];
 
     private const int MAX_REQUESTS_PER_MINUTE = 15;
     private const int MAX_CONVERSATION_MESSAGES = 30;
     private const int DISCORD_MESSAGE_LIMIT = 2000;
+    private const int PER_MODEL_TIMEOUT_SECONDS = 60;
 
     private const string SYSTEM_PROMPT = """
                                          ## Core Principles
@@ -42,7 +45,7 @@ public static class LLMChatService
     private static HttpClient CreateClient()
     {
         HttpClient client = new();
-        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {Environment.GetEnvironmentVariable("NVIDIA_API_KEY")}");
+        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")}");
         client.DefaultRequestHeaders.Add("Accept", "application/json");
         return client;
     }
@@ -225,14 +228,27 @@ public static class LLMChatService
         string requestJson = JsonSerializer.Serialize(request);
         await ArchenemyLogger.Log($"Asking {model}", "Discord");
 
-        HttpResponseMessage response = await Client.PostAsync(API_URL, new StringContent(requestJson, Encoding.UTF8, "application/json"));
-        string responseBody = await response.Content.ReadAsStringAsync();
-        await ArchenemyLogger.Log($"LLM response: {responseBody}", "Discord");
+        // Cap each model so a hung or slow one fails over to the next instead of stalling the
+        // whole command. Any failure (timeout, network error, bad JSON) returns null so the
+        // caller moves on down the chain rather than throwing out of it.
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(PER_MODEL_TIMEOUT_SECONDS));
+        try
+        {
+            StringContent body = new(requestJson, Encoding.UTF8, "application/json");
+            HttpResponseMessage response = await Client.PostAsync(API_URL, body, timeout.Token);
+            string responseBody = await response.Content.ReadAsStringAsync(timeout.Token);
+            await ArchenemyLogger.Log($"LLM response: {responseBody}", "Discord");
 
-        if (!response.IsSuccessStatusCode)
+            if (!response.IsSuccessStatusCode)
+                return null;
+
+            return ExtractAnswer(responseBody);
+        }
+        catch (Exception e)
+        {
+            await ArchenemyLogger.Log($"Model {model} failed: {e.Message}", "Discord");
             return null;
-
-        return ExtractAnswer(responseBody);
+        }
     }
 
     private static string? ExtractAnswer(string responseBody)
