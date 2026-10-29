@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -17,6 +18,7 @@ namespace TexitArchenemy.Services.Discord;
 public static class LLMChatService
 {
     private const string API_URL = "https://openrouter.ai/api/v1/chat/completions";
+    private const string KEY_INFO_URL = "https://openrouter.ai/api/v1/key";
 
     // Models tried in order until one answers. All accept text + image input, so !ask stays
     // multimodal. OpenRouter already fails over across upstream providers, but a model can still
@@ -28,6 +30,7 @@ public static class LLMChatService
     private const int MAX_CONVERSATION_MESSAGES = 30;
     private const int DISCORD_MESSAGE_LIMIT = 2000;
     private const int PER_MODEL_TIMEOUT_SECONDS = 60;
+    private const int CREDITS_TIMEOUT_SECONDS = 5;
     private const double EDIT_INTERVAL_SECONDS = 1.25;   // Discord allows ~5 message edits / 5s per channel
     private const int MAX_SOURCES_SHOWN = 4;
     private const string THINKING_PLACEHOLDER = "💭 Thinking…";
@@ -93,7 +96,7 @@ public static class LLMChatService
         {
             if (current.Author.Id == context.Client.CurrentUser.Id)
             {
-                conversation.AddFirst(new { role = "assistant", content = current.Content });
+                conversation.AddFirst(new { role = "assistant", content = StripFooters(current.Content) });
             }
             else if (TryStripAskPrefix(current.Content, out string question))
             {
@@ -205,10 +208,50 @@ public static class LLMChatService
             return;
         }
 
+        string? creditsFooter = await FetchCreditsFooter();
+        if (creditsFooter != null)
+            answer = $"{answer}\n{creditsFooter}";
+
         IReadOnlyList<string> chunks = SplitForDiscord(answer);
         await SafeEdit(reply, chunks[0]);
         for (int i = 1; i < chunks.Count; i++)
             await reply.Channel.SendMessageAsync(chunks[i], messageReference: new MessageReference(reply.Id));
+    }
+
+    // Reports the money left on the API key. A missing balance must never block the answer, so any
+    // failure just drops the footer.
+    private static async Task<string?> FetchCreditsFooter()
+    {
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(CREDITS_TIMEOUT_SECONDS));
+        try
+        {
+            using HttpResponseMessage response = await Client.GetAsync(KEY_INFO_URL, timeout.Token);
+            if (!response.IsSuccessStatusCode)
+                return null;
+
+            await using Stream stream = await response.Content.ReadAsStreamAsync(timeout.Token);
+            using JsonDocument document = await JsonDocument.ParseAsync(stream, cancellationToken: timeout.Token);
+
+            // limit_remaining is only set when the key has a credit limit configured on OpenRouter
+            JsonElement data = document.RootElement.GetProperty("data");
+            if (!data.TryGetProperty("limit_remaining", out JsonElement remaining) || remaining.ValueKind != JsonValueKind.Number)
+                return null;
+
+            return $"-# 💰 ${remaining.GetDouble().ToString("0.00", CultureInfo.InvariantCulture)} left";
+        }
+        catch (Exception e)
+        {
+            await ArchenemyLogger.Log($"Fetching OpenRouter credits failed: {e.Message}", "Discord");
+            return null;
+        }
+    }
+
+    // Footers (sources, credits) are Discord subtext for humans; feeding them back as conversation
+    // history would make the model imitate them in its own answers.
+    private static string StripFooters(string content)
+    {
+        IEnumerable<string> lines = content.Split('\n').Where(line => !line.StartsWith("-# ", StringComparison.Ordinal));
+        return string.Join('\n', lines).Trim();
     }
 
     // A failed edit (message deleted, transient rate limit) must not abort the stream, so swallow
